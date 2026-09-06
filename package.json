@@ -9,7 +9,11 @@
     "dev:client": "npm run dev --prefix client",
     "install:all": "npm install && npm install --prefix server && npm install --prefix client",
     "start": "npm run start --prefix server",
-    "build": "npm run build --prefix client"
+    "build": "npm run build --prefix client",
+    "build:netlify": "npm install --prefix server && npm install --prefix client && npm run build --prefix client"
+  },
+  "dependencies": {
+    "serverless-http": "^4.0.0"
   },
   "devDependencies": {
     "concurrently": "^9.2.1"

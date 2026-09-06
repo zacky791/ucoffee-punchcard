@@ -3,35 +3,28 @@
 Clock-in / clock-out system for cafe staff.
 
 - **Frontend:** React (Vite)
-- **Backend:** Node.js + Express
+- **Backend:** Node.js + Express (local) / Netlify Functions (production)
 - **Database:** Supabase (free tier)
 
 ## Folder structure
 
 ```
 U Coffee/
-├── client/          # React app (punch kiosk UI)
-├── server/          # Express API
-├── supabase/        # SQL schema to run in Supabase
-└── package.json     # Run both apps with one command
+├── client/              # React app
+├── server/              # Express API
+├── netlify/functions/   # Serverless API wrapper for Netlify
+├── supabase/            # SQL schema
+└── netlify.toml         # Netlify build + redirects
 ```
 
-## 1. Create a free Supabase project
+## Local setup
 
-1. Go to [https://supabase.com](https://supabase.com) and create a free project.
-2. Open **SQL Editor** → New query.
-3. Paste and run everything in `supabase/schema.sql`.
-4. Open **Project Settings → API** and copy:
-   - **Project URL**
-   - **service_role** key (secret — server only)
-
-## 2. Configure the server
+1. Create a free Supabase project and run `supabase/schema.sql` then `supabase/rls-publishable.sql`.
+2. Copy env:
 
 ```bash
 cp server/.env.example server/.env
 ```
-
-Edit `server/.env` with your project URL and **publishable** (or secret) key:
 
 ```env
 PORT=3001
@@ -39,70 +32,44 @@ SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co
 SUPABASE_ANON_KEY=sb_publishable_...
 ```
 
-Then also run `supabase/rls-publishable.sql` so the publishable key is allowed to read/write.
-
-If you have the **secret / service_role** key, prefer that instead:
-
-```env
-SUPABASE_SERVICE_ROLE_KEY=your_secret_key
-```
-
-## 3. Install & run
-
-From the `U Coffee` folder:
+3. Run:
 
 ```bash
 npm run install:all
 npm run dev
 ```
 
-- Punch UI: [http://localhost:5173](http://localhost:5173)
-- API: [http://localhost:3001](http://localhost:3001)
+- UI: http://localhost:5173  
+- API: http://localhost:3001  
+
+## Deploy on Netlify (frontend + API together)
+
+1. Push this repo to GitHub.
+2. In Netlify: **Add new site → Import from Git**.
+3. Settings (handled by `netlify.toml` — leave Base directory **empty / repo root**):
+   - Build command: `npm run build:netlify`
+   - Publish directory: `client/dist`
+   - Functions directory: `netlify/functions`
+4. **Site settings → Environment variables** — add:
+
+| Key | Value |
+|-----|--------|
+| `SUPABASE_URL` | `https://vjorugrrizrpoojpocns.supabase.co` |
+| `SUPABASE_ANON_KEY` | your publishable / anon key |
+
+Do **not** set `VITE_API_URL` on Netlify — the app calls `/api` on the same site.
+
+5. Deploy. Staff punch and history should work.
+
+### Important
+- Do **not** set Base directory to `client` (that was why the old deploy served raw `.jsx`).
+- Use the **production deploy URL**, not only the draft preview, after a successful build.
 
 ## How staff use it
 
-1. Open **Punch** (home screen).
-2. Tap your name.
-3. Enter your **4-digit PIN**.
-4. The system toggles automatically:
-   - If you are off → **clock in**
-   - If you are on floor → **clock out**
-
-Sample staff from the schema (change these PINs after setup):
-
-| Name         | PIN  |
-|--------------|------|
-| Aisha Rahman | 1234 |
-| Daniel Lim   | 2345 |
-| Mei Chen     | 3456 |
-| Omar Hassan  | 4567 |
-
-## Deploy
-
-### A) Frontend — Netlify
-
-1. Connect the GitHub repo on Netlify.
-2. Build settings are in `netlify.toml`:
-   - Base: `client`
-   - Command: `npm run build`
-   - Publish: `dist`
-3. After the API is live (step B), add env var:
-   ```
-   VITE_API_URL=https://YOUR-RENDER-SERVICE.onrender.com
-   ```
-4. Trigger a new deploy (env vars are baked in at build time).
-
-### B) Backend — Render
-
-1. Go to [https://render.com](https://render.com) → **New** → **Blueprint** (or Web Service).
-2. Connect `zacky791/u-coffee---clock-in-staff` (uses `render.yaml`).
-3. Set env vars (same values as local `server/.env`):
-   - `SUPABASE_URL`
-   - `SUPABASE_ANON_KEY`
-4. Deploy, then open `https://YOUR-SERVICE.onrender.com/api/health` — should return `{ "ok": true }`.
-5. Put that URL (no trailing slash) into Netlify `VITE_API_URL` and redeploy Netlify.
-
-Free Render services sleep when idle; the first request after sleep can take ~30–60s.
+1. Open **Punch**.
+2. Tap your name → check GPS map → confirm clock in/out.
+3. **History** shows all dates; expand a person for punch details + map.
 
 ## API overview
 
@@ -115,9 +82,3 @@ Free Render services sleep when idle; the first request after sleep can take ~30
 | POST | `/api/punch` | Clock in/out with GPS |
 | GET | `/api/punches` | Punch history |
 | GET | `/api/punches/today` | Today's punches |
-
-## Security notes
-
-- Keep Supabase keys in server/hosting env only — never commit `server/.env`.
-- GPS location is required for each punch.
-- With the publishable key, run `supabase/rls-publishable.sql`.
