@@ -100,3 +100,4 @@ Sample staff from the schema (change these PINs after setup):
 - The **service_role** key stays in `server/.env` only — never put it in the React app.
 - Staff verify with a PIN on each punch.
 - Tables use RLS with no public policies; the Node server bypasses RLS via the service role.
+# u-coffee---clock-in-staff
