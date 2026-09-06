@@ -325,6 +325,6 @@ app.get('/api/punches/today', requireDb, async (_req, res) => {
   }
 });
 
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`U Coffee punch API running on http://localhost:${PORT}`);
 });

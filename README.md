@@ -77,11 +77,32 @@ Sample staff from the schema (change these PINs after setup):
 | Mei Chen     | 3456 |
 | Omar Hassan  | 4567 |
 
-## Screens
+## Deploy
 
-- **Punch** — kiosk for clock in / out
-- **Staff** — add or deactivate team members
-- **History** — filter punches by date
+### A) Frontend — Netlify
+
+1. Connect the GitHub repo on Netlify.
+2. Build settings are in `netlify.toml`:
+   - Base: `client`
+   - Command: `npm run build`
+   - Publish: `dist`
+3. After the API is live (step B), add env var:
+   ```
+   VITE_API_URL=https://YOUR-RENDER-SERVICE.onrender.com
+   ```
+4. Trigger a new deploy (env vars are baked in at build time).
+
+### B) Backend — Render
+
+1. Go to [https://render.com](https://render.com) → **New** → **Blueprint** (or Web Service).
+2. Connect `zacky791/u-coffee---clock-in-staff` (uses `render.yaml`).
+3. Set env vars (same values as local `server/.env`):
+   - `SUPABASE_URL`
+   - `SUPABASE_ANON_KEY`
+4. Deploy, then open `https://YOUR-SERVICE.onrender.com/api/health` — should return `{ "ok": true }`.
+5. Put that URL (no trailing slash) into Netlify `VITE_API_URL` and redeploy Netlify.
+
+Free Render services sleep when idle; the first request after sleep can take ~30–60s.
 
 ## API overview
 
@@ -89,15 +110,14 @@ Sample staff from the schema (change these PINs after setup):
 |--------|------|-------------|
 | GET | `/api/health` | Health check |
 | GET | `/api/staff` | Active staff + clock status |
-| POST | `/api/staff` | Create staff `{ name, pin, role }` |
+| POST | `/api/staff` | Create staff `{ name, role }` |
 | PATCH | `/api/staff/:id` | Update / deactivate |
-| POST | `/api/punch` | Clock in/out `{ staff_id, pin }` |
-| GET | `/api/punches?date=YYYY-MM-DD` | Punch history |
+| POST | `/api/punch` | Clock in/out with GPS |
+| GET | `/api/punches` | Punch history |
 | GET | `/api/punches/today` | Today's punches |
 
 ## Security notes
 
-- The **service_role** key stays in `server/.env` only — never put it in the React app.
-- Staff verify with a PIN on each punch.
-- Tables use RLS with no public policies; the Node server bypasses RLS via the service role.
-# u-coffee---clock-in-staff
+- Keep Supabase keys in server/hosting env only — never commit `server/.env`.
+- GPS location is required for each punch.
+- With the publishable key, run `supabase/rls-publishable.sql`.
