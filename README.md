@@ -82,3 +82,4 @@ Do **not** set `VITE_API_URL` on Netlify — the app calls `/api` on the same si
 | POST | `/api/punch` | Clock in/out with GPS |
 | GET | `/api/punches` | Punch history |
 | GET | `/api/punches/today` | Today's punches |
+# ucoffee-punchcard
