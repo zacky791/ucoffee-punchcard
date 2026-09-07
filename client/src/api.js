@@ -9,9 +9,12 @@ const supabaseKey =
   import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
   '';
 
+// Prefer Render/API when VITE_API_URL is set; otherwise use Supabase direct or Vite proxy.
+const API_BASE = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
 const hasSupabase = Boolean(supabaseUrl && supabaseKey);
+const useDirectSupabase = hasSupabase && !API_BASE;
 
-const supabase = hasSupabase
+const supabase = useDirectSupabase
   ? createClient(supabaseUrl, supabaseKey, {
       auth: { persistSession: false, autoRefreshToken: false },
     })
@@ -45,8 +48,6 @@ function requireSupabase() {
     );
   }
 }
-
-const API_BASE = import.meta.env.VITE_API_URL ?? '';
 
 async function request(path, options = {}) {
   const res = await fetch(`${API_BASE}${path}`, {
@@ -225,32 +226,176 @@ async function getTodayDirect() {
   return data || [];
 }
 
+async function getHoursDirect() {
+  requireSupabase();
+  const { data, error } = await supabase
+    .from('cafe_hours')
+    .select('day_of_week, is_closed, open_time, close_time')
+    .order('day_of_week');
+  if (error) throw new Error(error.message);
+  return data || [];
+}
+
+async function saveHoursDirect(hours) {
+  requireSupabase();
+  const payload = hours.map((row) => ({
+    day_of_week: Number(row.day_of_week),
+    is_closed: Boolean(row.is_closed),
+    open_time: row.is_closed ? null : row.open_time || null,
+    close_time: row.is_closed ? null : row.close_time || null,
+  }));
+  const { data, error } = await supabase
+    .from('cafe_hours')
+    .upsert(payload, { onConflict: 'day_of_week' })
+    .select('day_of_week, is_closed, open_time, close_time')
+    .order('day_of_week');
+  if (error) throw new Error(error.message);
+  return data || [];
+}
+
+async function getRosterDirect(params = {}) {
+  requireSupabase();
+  let query = supabase
+    .from('roster_assignments')
+    .select(
+      'id, week_start, day_of_week, staff_id, section, staff:staff_id(id, name, role)'
+    )
+    .order('day_of_week');
+  if (params.week_start) query = query.eq('week_start', params.week_start);
+  const { data, error } = await query;
+  if (error) throw new Error(error.message);
+  return data || [];
+}
+
+async function saveRosterDayDirect(day, body) {
+  requireSupabase();
+  const weekStart = body?.week_start;
+  if (!weekStart) throw new Error('week_start is required');
+
+  const kitchen = Array.isArray(body?.kitchen) ? body.kitchen : [];
+  const barista = Array.isArray(body?.barista) ? body.barista : [];
+
+  const { error: delError } = await supabase
+    .from('roster_assignments')
+    .delete()
+    .eq('day_of_week', day)
+    .eq('week_start', weekStart);
+  if (delError) throw new Error(delError.message);
+
+  const rows = [
+    ...kitchen.map((staff_id) => ({
+      week_start: weekStart,
+      day_of_week: Number(day),
+      staff_id,
+      section: 'kitchen',
+    })),
+    ...barista.map((staff_id) => ({
+      week_start: weekStart,
+      day_of_week: Number(day),
+      staff_id,
+      section: 'barista',
+    })),
+  ];
+
+  if (rows.length) {
+    const { error: insError } = await supabase
+      .from('roster_assignments')
+      .insert(rows);
+    if (insError) throw new Error(insError.message);
+  }
+
+  const { data, error } = await supabase
+    .from('roster_assignments')
+    .select(
+      'id, week_start, day_of_week, staff_id, section, staff:staff_id(id, name, role)'
+    )
+    .eq('day_of_week', day)
+    .eq('week_start', weekStart);
+  if (error) throw new Error(error.message);
+  return data || [];
+}
+
+async function getPerformanceDirect(params = {}) {
+  requireSupabase();
+  const days = Math.min(Math.max(Number(params.days) || 30, 1), 90);
+  const start = new Date();
+  start.setHours(0, 0, 0, 0);
+  start.setDate(start.getDate() - (days - 1));
+
+  const { data: staff, error: staffError } = await supabase
+    .from('staff')
+    .select('id, name, role, active')
+    .eq('active', true);
+  if (staffError) throw new Error(staffError.message);
+
+  const { data: punches, error: punchError } = await supabase
+    .from('punches')
+    .select(PUNCH_SELECT)
+    .gte('punched_at', start.toISOString())
+    .order('punched_at', { ascending: true });
+  if (punchError) throw new Error(punchError.message);
+
+  return {
+    days,
+    from: start.toISOString(),
+    punches: punches || [],
+    staff: staff || [],
+  };
+}
+
 export const api = {
   health: async () => {
-    if (hasSupabase) return { ok: true, service: 'u-coffee-direct', db: true };
+    if (useDirectSupabase) return { ok: true, service: 'u-coffee-direct', db: true };
     return request('/api/health');
   },
-  getStaff: () => (hasSupabase ? getStaffDirect() : request('/api/staff')),
+  getStaff: () =>
+    useDirectSupabase ? getStaffDirect() : request('/api/staff'),
   createStaff: (body) =>
-    hasSupabase
+    useDirectSupabase
       ? createStaffDirect(body)
       : request('/api/staff', { method: 'POST', body: JSON.stringify(body) }),
   updateStaff: (id, body) =>
-    hasSupabase
+    useDirectSupabase
       ? updateStaffDirect(id, body)
       : request(`/api/staff/${id}`, {
           method: 'PATCH',
           body: JSON.stringify(body),
         }),
   punch: (body) =>
-    hasSupabase
+    useDirectSupabase
       ? punchDirect(body)
       : request('/api/punch', { method: 'POST', body: JSON.stringify(body) }),
   getPunches: (params = {}) => {
-    if (hasSupabase) return getPunchesDirect(params);
+    if (useDirectSupabase) return getPunchesDirect(params);
     const qs = new URLSearchParams(params).toString();
     return request(`/api/punches${qs ? `?${qs}` : ''}`);
   },
   getToday: () =>
-    hasSupabase ? getTodayDirect() : request('/api/punches/today'),
+    useDirectSupabase ? getTodayDirect() : request('/api/punches/today'),
+  getHours: () =>
+    useDirectSupabase ? getHoursDirect() : request('/api/hours'),
+  saveHours: (hours) =>
+    useDirectSupabase
+      ? saveHoursDirect(hours)
+      : request('/api/hours', {
+          method: 'PUT',
+          body: JSON.stringify(hours),
+        }),
+  getRoster: (params = {}) => {
+    if (useDirectSupabase) return getRosterDirect(params);
+    const qs = new URLSearchParams(params).toString();
+    return request(`/api/roster${qs ? `?${qs}` : ''}`);
+  },
+  saveRosterDay: (day, body) =>
+    useDirectSupabase
+      ? saveRosterDayDirect(day, body)
+      : request(`/api/roster/${day}`, {
+          method: 'PUT',
+          body: JSON.stringify(body),
+        }),
+  getPerformance: (params = {}) => {
+    if (useDirectSupabase) return getPerformanceDirect(params);
+    const qs = new URLSearchParams(params).toString();
+    return request(`/api/performance${qs ? `?${qs}` : ''}`);
+  },
 };

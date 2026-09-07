@@ -4,8 +4,8 @@
 
 [build.environment]
   NODE_VERSION = "22"
-  VITE_SUPABASE_URL = "https://vjorugrrizrpoojpocns.supabase.co"
-  VITE_SUPABASE_ANON_KEY = "sb_publishable_-FitU-ye05ca172usIPIjQ_6AIbI_G6"
+  VITE_API_URL = "https://ucoffee-clock-in-backend.onrender.com"
+  VITE_STAFF_PIN = "9897"
 
 [[redirects]]
   from = "/*"

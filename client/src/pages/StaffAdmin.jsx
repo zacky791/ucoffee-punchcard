@@ -3,8 +3,59 @@ import { api } from '../api';
 import { roleLabel } from '../lib/time';
 
 const KITCHEN_ROLES = new Set(['head_chef', 'assistant_chef', 'kitchen']);
+const STAFF_PIN = String(import.meta.env.VITE_STAFF_PIN || '9897');
+
+function StaffLock({ onUnlock }) {
+  const [pin, setPin] = useState('');
+  const [error, setError] = useState('');
+
+  function submit(e) {
+    e.preventDefault();
+    if (String(pin) === STAFF_PIN) {
+      onUnlock();
+      return;
+    }
+    setError('Incorrect PIN');
+    setPin('');
+  }
+
+  return (
+    <section className="page staff-lock">
+      <div className="staff-lock-card">
+        <p className="eyebrow">Restricted</p>
+        <h1>Staff access</h1>
+        <p className="lede">Enter the staff PIN to open the directory.</p>
+
+        <form className="staff-lock-form" onSubmit={submit}>
+          <label>
+            Staff PIN
+            <input
+              type="password"
+              inputMode="numeric"
+              pattern="\d*"
+              maxLength={8}
+              autoFocus
+              autoComplete="off"
+              value={pin}
+              onChange={(e) => {
+                setPin(e.target.value.replace(/\D/g, '').slice(0, 8));
+                setError('');
+              }}
+              placeholder="Enter PIN"
+            />
+          </label>
+          {error && <p className="banner error">{error}</p>}
+          <button type="submit" className="btn primary">
+            Unlock staff
+          </button>
+        </form>
+      </div>
+    </section>
+  );
+}
 
 export default function StaffAdmin() {
+  const [unlocked, setUnlocked] = useState(false);
   const [staff, setStaff] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -15,6 +66,7 @@ export default function StaffAdmin() {
   async function load() {
     try {
       setError('');
+      setLoading(true);
       const data = await api.getStaff();
       setStaff(data);
     } catch (err) {
@@ -25,8 +77,10 @@ export default function StaffAdmin() {
   }
 
   useEffect(() => {
+    if (!unlocked) return undefined;
     load();
-  }, []);
+    return undefined;
+  }, [unlocked]);
 
   async function onSubmit(e) {
     e.preventDefault();
@@ -56,6 +110,10 @@ export default function StaffAdmin() {
     }
   }
 
+  if (!unlocked) {
+    return <StaffLock onUnlock={() => setUnlocked(true)} />;
+  }
+
   const kitchen = staff.filter((s) => KITCHEN_ROLES.has(s.role));
   const baristas = staff.filter((s) => !KITCHEN_ROLES.has(s.role));
 
@@ -66,6 +124,16 @@ export default function StaffAdmin() {
         <h1>Staff directory</h1>
         <p className="lede">Add kitchen or barista team members.</p>
       </header>
+
+      <div className="history-toolbar compact">
+        <button
+          type="button"
+          className="btn ghost"
+          onClick={() => setUnlocked(false)}
+        >
+          Lock staff page
+        </button>
+      </div>
 
       <form className="staff-form no-pin" onSubmit={onSubmit}>
         <label>

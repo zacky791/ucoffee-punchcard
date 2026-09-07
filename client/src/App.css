@@ -847,3 +847,367 @@ select:focus {
     align-items: flex-start;
   }
 }
+
+.staff-lock {
+  display: grid;
+  place-items: center;
+  min-height: 60vh;
+}
+
+.staff-lock-card {
+  width: min(100%, 400px);
+  padding: 1.5rem;
+  border-radius: calc(var(--radius) + 4px);
+  background: var(--surface-strong);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+}
+
+.staff-lock-card h1 {
+  margin: 0.35rem 0 0;
+  font-family: var(--font-display);
+  font-size: 2rem;
+  letter-spacing: -0.03em;
+  color: var(--brand);
+}
+
+.staff-lock-card .lede {
+  margin: 0.55rem 0 1.1rem;
+}
+
+.staff-lock-form {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.staff-lock-form .btn {
+  width: 100%;
+}
+
+.history-toolbar.compact {
+  width: fit-content;
+  padding: 0.55rem;
+  margin-bottom: 0.75rem;
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.perf-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+}
+
+.perf-stat {
+  display: grid;
+  gap: 0.35rem;
+  padding: 1rem;
+  border-radius: 16px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-soft);
+}
+
+.perf-stat span {
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.perf-stat strong {
+  font-family: var(--font-display);
+  font-size: 1.55rem;
+  letter-spacing: -0.03em;
+  color: var(--brand);
+}
+
+.perf-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.65rem;
+}
+
+.perf-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: center;
+  padding: 1rem 1.1rem;
+  border-radius: 16px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+}
+
+.perf-who,
+.perf-metrics {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.perf-who span,
+.perf-meta {
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+
+.perf-metrics {
+  justify-items: end;
+  text-align: right;
+}
+
+.week-nav {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  margin-bottom: 1rem;
+  padding: 0.75rem 0.9rem;
+  border-radius: var(--radius);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-soft);
+}
+
+.week-nav-label {
+  display: grid;
+  gap: 0.1rem;
+  min-width: 160px;
+}
+
+.week-nav-label strong {
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  letter-spacing: -0.02em;
+  color: var(--brand);
+}
+
+.week-nav-label span {
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.week-jump {
+  margin-left: auto;
+  display: grid;
+  gap: 0.25rem;
+  font-size: 0.75rem;
+  font-weight: 650;
+  color: var(--muted);
+}
+
+.week-jump input {
+  min-width: 150px;
+}
+
+.weekday-btn.dated {
+  display: grid;
+  gap: 0.15rem;
+  justify-items: center;
+  padding: 0.65rem 0.3rem;
+}
+
+.weekday-name {
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  opacity: 0.8;
+}
+
+.weekday-date {
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  font-weight: 550;
+  line-height: 1;
+}
+
+.weekday-btn.today:not(.active) {
+  border-color: rgba(196, 95, 26, 0.45);
+}
+
+.schedule-day-sub {
+  margin: 0.2rem 0 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.weekday-row {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 0.45rem;
+  margin-bottom: 1rem;
+}
+
+.weekday-btn {
+  padding: 0.75rem 0.35rem;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: clamp(0.72rem, 2.4vw, 0.9rem);
+  font-weight: 650;
+  box-shadow: var(--shadow-soft);
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.weekday-btn.active {
+  background: var(--brand);
+  border-color: transparent;
+  color: #f4f7f2;
+}
+
+.schedule-day-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.schedule-day-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.45rem;
+  letter-spacing: -0.02em;
+  color: var(--brand);
+}
+
+.status-toggle {
+  display: inline-flex;
+  padding: 0.2rem;
+  border-radius: 999px;
+  background: rgba(28, 42, 31, 0.06);
+  border: 1px solid var(--line);
+}
+
+.status-toggle-btn {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 700;
+  padding: 0.45rem 0.85rem;
+  border-radius: 999px;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.status-toggle-btn.active.open {
+  background: rgba(31, 122, 85, 0.16);
+  color: var(--in);
+}
+
+.status-toggle-btn.active.closed {
+  background: rgba(138, 82, 68, 0.14);
+  color: var(--out);
+}
+
+.schedule-closed-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+.schedule-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+}
+
+.schedule-panel {
+  display: grid;
+  gap: 1.1rem;
+  padding: 1.2rem;
+  border-radius: var(--radius);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-soft);
+}
+
+.check-row {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.hours-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+
+.schedule-sections {
+  display: grid;
+  gap: 1.25rem;
+}
+
+@media (min-width: 800px) {
+  .schedule-sections {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.assign-grid {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.assign-chip {
+  display: grid;
+  gap: 0.15rem;
+  text-align: left;
+  padding: 0.85rem 0.95rem;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.55);
+  color: inherit;
+  transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s ease;
+}
+
+.assign-chip strong {
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+}
+
+.assign-chip span {
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
+.assign-chip.on {
+  border-color: rgba(31, 122, 85, 0.35);
+  background: rgba(31, 122, 85, 0.12);
+}
+
+.assign-chip:hover {
+  transform: translateY(-1px);
+}
+
+@media (max-width: 720px) {
+  .weekday-row {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .nav-links {
+    overflow-x: auto;
+    max-width: 100%;
+  }
+
+  .perf-list li {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .perf-metrics {
+    justify-items: start;
+    text-align: left;
+  }
+}
+

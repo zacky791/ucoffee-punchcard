@@ -3,7 +3,7 @@ require('dotenv').config({ path: path.join(__dirname, '../.env') });
 const express = require('express');
 const cors = require('cors');
 const { createClient } = require('@supabase/supabase-js');
-
+//location map
 const app = express();
 
 app.use(cors({ origin: true }));
@@ -321,6 +321,159 @@ app.get('/api/punches/today', requireDb, async (_req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: err.message || 'Failed to load today' });
+  }
+});
+
+app.get('/api/hours', requireDb, async (_req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('cafe_hours')
+      .select('day_of_week, is_closed, open_time, close_time')
+      .order('day_of_week');
+    if (error) throw error;
+    res.json(data || []);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message || 'Failed to load hours' });
+  }
+});
+
+app.put('/api/hours', requireDb, async (req, res) => {
+  try {
+    const rows = Array.isArray(req.body) ? req.body : req.body?.hours;
+    if (!Array.isArray(rows) || !rows.length) {
+      return res.status(400).json({ error: 'hours array is required' });
+    }
+
+    const payload = rows.map((row) => ({
+      day_of_week: Number(row.day_of_week),
+      is_closed: Boolean(row.is_closed),
+      open_time: row.is_closed ? null : row.open_time || null,
+      close_time: row.is_closed ? null : row.close_time || null,
+    }));
+
+    const { data, error } = await supabase
+      .from('cafe_hours')
+      .upsert(payload, { onConflict: 'day_of_week' })
+      .select('day_of_week, is_closed, open_time, close_time')
+      .order('day_of_week');
+    if (error) throw error;
+    res.json(data || []);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message || 'Failed to save hours' });
+  }
+});
+
+app.get('/api/roster', requireDb, async (req, res) => {
+  try {
+    const weekStart = req.query.week_start;
+    let query = supabase
+      .from('roster_assignments')
+      .select(
+        'id, week_start, day_of_week, staff_id, section, staff:staff_id(id, name, role)'
+      )
+      .order('day_of_week');
+
+    if (weekStart) query = query.eq('week_start', weekStart);
+
+    const { data, error } = await query;
+    if (error) throw error;
+    res.json(data || []);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message || 'Failed to load roster' });
+  }
+});
+
+app.put('/api/roster/:day', requireDb, async (req, res) => {
+  try {
+    const day = Number(req.params.day);
+    if (Number.isNaN(day) || day < 0 || day > 6) {
+      return res.status(400).json({ error: 'day must be 0-6' });
+    }
+
+    const weekStart = req.body?.week_start;
+    if (!weekStart || !/^\d{4}-\d{2}-\d{2}$/.test(String(weekStart))) {
+      return res.status(400).json({ error: 'week_start (YYYY-MM-DD) is required' });
+    }
+
+    const kitchen = Array.isArray(req.body?.kitchen) ? req.body.kitchen : [];
+    const barista = Array.isArray(req.body?.barista) ? req.body.barista : [];
+
+    const { error: delError } = await supabase
+      .from('roster_assignments')
+      .delete()
+      .eq('day_of_week', day)
+      .eq('week_start', weekStart);
+    if (delError) throw delError;
+
+    const rows = [
+      ...kitchen.map((staff_id) => ({
+        week_start: weekStart,
+        day_of_week: day,
+        staff_id,
+        section: 'kitchen',
+      })),
+      ...barista.map((staff_id) => ({
+        week_start: weekStart,
+        day_of_week: day,
+        staff_id,
+        section: 'barista',
+      })),
+    ];
+
+    if (rows.length) {
+      const { error: insError } = await supabase
+        .from('roster_assignments')
+        .insert(rows);
+      if (insError) throw insError;
+    }
+
+    const { data, error } = await supabase
+      .from('roster_assignments')
+      .select(
+        'id, week_start, day_of_week, staff_id, section, staff:staff_id(id, name, role)'
+      )
+      .eq('day_of_week', day)
+      .eq('week_start', weekStart);
+    if (error) throw error;
+    res.json(data || []);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message || 'Failed to save roster' });
+  }
+});
+
+app.get('/api/performance', requireDb, async (req, res) => {
+  try {
+    const days = Math.min(Math.max(Number(req.query.days) || 30, 1), 90);
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+    start.setDate(start.getDate() - (days - 1));
+
+    const { data: staff, error: staffError } = await supabase
+      .from('staff')
+      .select('id, name, role, active')
+      .eq('active', true);
+    if (staffError) throw staffError;
+
+    const { data: punches, error: punchError } = await supabase
+      .from('punches')
+      .select(PUNCH_SELECT)
+      .gte('punched_at', start.toISOString())
+      .order('punched_at', { ascending: true });
+    if (punchError) throw punchError;
+
+    res.json({
+      days,
+      from: start.toISOString(),
+      punches: punches || [],
+      staff: staff || [],
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message || 'Failed to load performance' });
   }
 });
 

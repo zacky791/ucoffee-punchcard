@@ -1,0 +1,167 @@
+/** Pair clock-in/out punches into worked sessions and totals. */
+
+export function buildPerformance(punches = [], staffList = []) {
+  const byStaff = new Map();
+
+  for (const person of staffList) {
+    byStaff.set(person.id, {
+      staff_id: person.id,
+      name: person.name,
+      role: person.role,
+      punches: [],
+      sessions: [],
+      total_ms: 0,
+      days: new Set(),
+      open_session: null,
+      punch_count: 0,
+    });
+  }
+
+  const sorted = [...punches].sort(
+    (a, b) => new Date(a.punched_at) - new Date(b.punched_at)
+  );
+
+  for (const punch of sorted) {
+    const id = punch.staff_id;
+    if (!byStaff.has(id)) {
+      byStaff.set(id, {
+        staff_id: id,
+        name: punch.staff?.name || 'Unknown',
+        role: punch.staff?.role || '',
+        punches: [],
+        sessions: [],
+        total_ms: 0,
+        days: new Set(),
+        open_session: null,
+        punch_count: 0,
+      });
+    }
+    const row = byStaff.get(id);
+    row.punches.push(punch);
+    row.punch_count += 1;
+    row.days.add(new Date(punch.punched_at).toDateString());
+
+    if (punch.type === 'in') {
+      row.open_session = punch;
+    } else if (punch.type === 'out' && row.open_session) {
+      const start = new Date(row.open_session.punched_at);
+      const end = new Date(punch.punched_at);
+      const ms = Math.max(0, end - start);
+      row.sessions.push({
+        in: row.open_session,
+        out: punch,
+        ms,
+      });
+      row.total_ms += ms;
+      row.open_session = null;
+    }
+  }
+
+  return [...byStaff.values()]
+    .map((row) => ({
+      staff_id: row.staff_id,
+      name: row.name,
+      role: row.role,
+      punch_count: row.punch_count,
+      days_worked: row.days.size,
+      sessions: row.sessions.length,
+      total_ms: row.total_ms,
+      total_hours: Math.round((row.total_ms / 3600000) * 10) / 10,
+      open_now: Boolean(row.open_session),
+    }))
+    .filter((row) => row.punch_count > 0 || staffList.some((s) => s.id === row.staff_id))
+    .sort((a, b) => b.total_ms - a.total_ms || a.name.localeCompare(b.name));
+}
+
+export function formatHours(hours) {
+  if (!hours) return '0h';
+  const h = Math.floor(hours);
+  const m = Math.round((hours - h) * 60);
+  if (!m) return `${h}h`;
+  return `${h}h ${m}m`;
+}
+
+export const DAY_ORDER = [1, 2, 3, 4, 5, 6, 0]; // Mon → Sun
+
+export const DAY_LABELS = {
+  0: 'Sunday',
+  1: 'Monday',
+  2: 'Tuesday',
+  3: 'Wednesday',
+  4: 'Thursday',
+  5: 'Friday',
+  6: 'Saturday',
+};
+
+export const DAY_SHORT = {
+  0: 'Sun',
+  1: 'Mon',
+  2: 'Tue',
+  3: 'Wed',
+  4: 'Thu',
+  5: 'Fri',
+  6: 'Sat',
+};
+
+/** Monday date (YYYY-MM-DD) for the week containing `date`. */
+export function startOfWeek(date = new Date()) {
+  const d = new Date(date);
+  d.setHours(12, 0, 0, 0);
+  const day = d.getDay(); // 0 Sun … 6 Sat
+  const diff = day === 0 ? -6 : 1 - day;
+  d.setDate(d.getDate() + diff);
+  return toDateKey(d);
+}
+
+export function addDays(dateKey, days) {
+  const d = parseDateKey(dateKey);
+  d.setDate(d.getDate() + days);
+  return toDateKey(d);
+}
+
+export function toDateKey(date) {
+  const d = date instanceof Date ? date : parseDateKey(date);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+export function parseDateKey(dateKey) {
+  const [y, m, d] = String(dateKey).split('-').map(Number);
+  return new Date(y, m - 1, d, 12, 0, 0, 0);
+}
+
+export function formatWeekRange(weekStart) {
+  const start = parseDateKey(weekStart);
+  const end = parseDateKey(addDays(weekStart, 6));
+  const opts = { month: 'short', day: 'numeric' };
+  const startLabel = start.toLocaleDateString(undefined, opts);
+  const endLabel = end.toLocaleDateString(undefined, {
+    ...opts,
+    year: 'numeric',
+  });
+  return `${startLabel} – ${endLabel}`;
+}
+
+export function dateForWeekDay(weekStart, dayOfWeek) {
+  // weekStart is Monday; DAY_ORDER maps Mon=1 … Sun=0
+  const offset = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+  return addDays(weekStart, offset);
+}
+
+export function formatDayDate(dateKey) {
+  return parseDateKey(dateKey).toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+  });
+}
+
+export function formatTimeLabel(time) {
+  if (!time) return '—';
+  const [hh, mm] = String(time).slice(0, 5).split(':');
+  const h = Number(hh);
+  const suffix = h >= 12 ? 'PM' : 'AM';
+  const hour12 = h % 12 || 12;
+  return `${hour12}:${mm} ${suffix}`;
+}
