@@ -74,11 +74,82 @@ export function buildPerformance(punches = [], staffList = []) {
 }
 
 export function formatHours(hours) {
-  if (!hours) return '0h';
+  if (!hours && hours !== 0) return '0h';
   const h = Math.floor(hours);
   const m = Math.round((hours - h) * 60);
   if (!m) return `${h}h`;
   return `${h}h ${m}m`;
+}
+
+export function formatHoursFromMs(ms) {
+  return formatHours(ms / 3600000);
+}
+
+/** 12-hour clock, e.g. 9:05 AM */
+export function formatClock12(iso) {
+  return new Intl.DateTimeFormat(undefined, {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  }).format(new Date(iso));
+}
+
+/**
+ * Group punches into per-staff day summaries with in/out sessions + total.
+ */
+export function buildDayStaffSummaries(punches = []) {
+  const byStaff = new Map();
+
+  const sorted = [...punches].sort(
+    (a, b) => new Date(a.punched_at) - new Date(b.punched_at)
+  );
+
+  for (const punch of sorted) {
+    const id = punch.staff_id || punch.staff?.id || 'unknown';
+    if (!byStaff.has(id)) {
+      byStaff.set(id, {
+        staff_id: id,
+        name: punch.staff?.name || 'Unknown',
+        role: punch.staff?.role || '',
+        sessions: [],
+        openIn: null,
+        total_ms: 0,
+        firstIn: null,
+        lastOut: null,
+      });
+    }
+    const row = byStaff.get(id);
+
+    if (punch.type === 'in') {
+      row.openIn = punch;
+      if (!row.firstIn) row.firstIn = punch;
+    } else if (punch.type === 'out') {
+      row.lastOut = punch;
+      if (row.openIn) {
+        const ms = Math.max(
+          0,
+          new Date(punch.punched_at) - new Date(row.openIn.punched_at)
+        );
+        row.sessions.push({
+          in: row.openIn,
+          out: punch,
+          ms,
+        });
+        row.total_ms += ms;
+        row.openIn = null;
+      }
+    }
+  }
+
+  return [...byStaff.values()]
+    .map((row) => ({
+      ...row,
+      still_in: Boolean(row.openIn),
+      total_label: formatHoursFromMs(row.total_ms),
+      in_label: row.firstIn ? formatClock12(row.firstIn.punched_at) : null,
+      out_label: row.lastOut ? formatClock12(row.lastOut.punched_at) : null,
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name));
 }
 
 export const DAY_ORDER = [1, 2, 3, 4, 5, 6, 0]; // Mon → Sun
