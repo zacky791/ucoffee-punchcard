@@ -5,6 +5,10 @@
 
 [build.environment]
   NODE_VERSION = "22"
+  # Set real values in Netlify UI (Site settings → Environment variables).
+  # Names expected by the API function:
+  # SUPABASE_URL
+  # SUPABASE_ANON_KEY
 
 [functions]
   node_bundler = "esbuild"

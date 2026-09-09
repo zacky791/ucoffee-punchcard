@@ -1,5 +1,8 @@
 const path = require('path');
-require('dotenv').config({ path: path.join(__dirname, '../.env') });
+// Local only — Netlify injects env at runtime; don't rely on a .env file there
+if (!process.env.NETLIFY && !process.env.AWS_LAMBDA_FUNCTION_NAME) {
+  require('dotenv').config({ path: path.join(__dirname, '../.env') });
+}
 const express = require('express');
 const cors = require('cors');
 const { createClient } = require('@supabase/supabase-js');
@@ -9,43 +12,41 @@ const app = express();
 app.use(cors({ origin: true }));
 app.use(express.json());
 
-const supabaseUrl =
-  process.env.SUPABASE_URL ||
-  process.env.VITE_SUPABASE_URL ||
-  process.env.VITE_SUPABASE_PROJECT_URL;
-const supabaseKey =
-  process.env.SUPABASE_SERVICE_ROLE_KEY ||
-  process.env.SUPABASE_ANON_KEY ||
-  process.env.SUPABASE_PUBLISHABLE_KEY ||
-  process.env.VITE_SUPABASE_ANON_KEY ||
-  process.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-
-const isPlaceholder =
-  !supabaseUrl ||
-  !supabaseKey ||
-  /YOUR_PROJECT_REF|your_project_ref|your_service_role_key|your_anon_key/i.test(
-    `${supabaseUrl}\n${supabaseKey}`
-  );
-
-if (isPlaceholder) {
-  console.warn(
-    '\n⚠️  Supabase is not configured yet.\n' +
-      '   Edit server/.env with SUPABASE_URL + SUPABASE_ANON_KEY\n'
-  );
-} else if (
-  !process.env.SUPABASE_SERVICE_ROLE_KEY &&
-  (process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_PUBLISHABLE_KEY)
-) {
-  console.log(
-    'Using publishable/anon key — make sure you ran supabase/rls-publishable.sql'
-  );
+function readSupabaseConfig() {
+  const url =
+    process.env.SUPABASE_URL ||
+    process.env.VITE_SUPABASE_URL ||
+    process.env.VITE_SUPABASE_PROJECT_URL ||
+    '';
+  const key =
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.SUPABASE_ANON_KEY ||
+    process.env.SUPABASE_PUBLISHABLE_KEY ||
+    process.env.VITE_SUPABASE_ANON_KEY ||
+    process.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
+    '';
+  const placeholder =
+    /YOUR_PROJECT_REF|your_project_ref|your_service_role_key|your_anon_key/i.test(
+      `${url}\n${key}`
+    );
+  return {
+    url: String(url).trim(),
+    key: String(key).trim(),
+    ok: Boolean(url && key && !placeholder),
+  };
 }
 
-const supabase = !isPlaceholder
-  ? createClient(supabaseUrl, supabaseKey, {
-      auth: { persistSession: false, autoRefreshToken: false },
-    })
-  : null;
+let supabase = null;
+
+function getSupabase() {
+  if (supabase) return supabase;
+  const cfg = readSupabaseConfig();
+  if (!cfg.ok) return null;
+  supabase = createClient(cfg.url, cfg.key, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+  return supabase;
+}
 
 const PUNCH_SELECT =
   'id, staff_id, type, punched_at, note, latitude, longitude, accuracy, location_label, staff:staff_id(id, name, role)';
@@ -94,12 +95,22 @@ const ROLE_ORDER = {
 };
 
 function requireDb(req, res, next) {
-  if (!supabase) {
+  const db = getSupabase();
+  if (!db) {
+    const cfg = readSupabaseConfig();
     return res.status(503).json({
       error:
         'Database not configured. On Netlify set SUPABASE_URL and SUPABASE_ANON_KEY (Site settings → Environment variables), then redeploy.',
+      debug: {
+        hasUrl: Boolean(cfg.url),
+        hasKey: Boolean(cfg.key),
+        netlify: Boolean(
+          process.env.NETLIFY || process.env.AWS_LAMBDA_FUNCTION_NAME
+        ),
+      },
     });
   }
+  req.supabase = db;
   next();
 }
 
@@ -144,23 +155,28 @@ function parseLocation(body = {}) {
 }
 
 app.get('/api/health', (_req, res) => {
+  const cfg = readSupabaseConfig();
   res.json({
     ok: true,
     service: 'u-coffee-punch',
-    db: Boolean(supabase),
+    db: Boolean(getSupabase()),
+    env: {
+      hasUrl: Boolean(cfg.url),
+      hasKey: Boolean(cfg.key),
+    },
   });
 });
 
 app.get('/api/staff', requireDb, async (_req, res) => {
   try {
-    const { data: staff, error } = await supabase
+    const { data: staff, error } = await getSupabase()
       .from('staff')
       .select('id, name, role, active, created_at')
       .eq('active', true);
 
     if (error) throw error;
 
-    const { data: statusRows, error: statusError } = await supabase
+    const { data: statusRows, error: statusError } = await getSupabase()
       .from('staff_status')
       .select('staff_id, last_punch_type, last_punched_at, is_clocked_in');
 
@@ -194,7 +210,7 @@ app.post('/api/staff', requireDb, async (req, res) => {
       return res.status(400).json({ error: 'Name is required' });
     }
 
-    const { data, error } = await supabase
+    const { data, error } = await getSupabase()
       .from('staff')
       .insert({
         name: name.trim(),
@@ -224,7 +240,7 @@ app.patch('/api/staff/:id', requireDb, async (req, res) => {
       return res.status(400).json({ error: 'No updates provided' });
     }
 
-    const { data, error } = await supabase
+    const { data, error } = await getSupabase()
       .from('staff')
       .update(updates)
       .eq('id', id)
@@ -261,7 +277,7 @@ app.post('/api/punch', requireDb, async (req, res) => {
       return res.status(403).json({ error: zoneCheck.error });
     }
 
-    const { data: person, error: staffError } = await supabase
+    const { data: person, error: staffError } = await getSupabase()
       .from('staff')
       .select('id, name, active')
       .eq('id', staff_id)
@@ -274,7 +290,7 @@ app.post('/api/punch', requireDb, async (req, res) => {
       return res.status(403).json({ error: 'Staff member is inactive' });
     }
 
-    const { data: lastPunch, error: lastError } = await supabase
+    const { data: lastPunch, error: lastError } = await getSupabase()
       .from('punches')
       .select('type, punched_at')
       .eq('staff_id', staff_id)
@@ -286,7 +302,7 @@ app.post('/api/punch', requireDb, async (req, res) => {
 
     const nextType = lastPunch?.type === 'in' ? 'out' : 'in';
 
-    const { data: punch, error: punchError } = await supabase
+    const { data: punch, error: punchError } = await getSupabase()
       .from('punches')
       .insert({
         staff_id,
@@ -319,7 +335,7 @@ app.post('/api/punch', requireDb, async (req, res) => {
 app.get('/api/punches', requireDb, async (req, res) => {
   try {
     const { staff_id, date, limit = '50' } = req.query;
-    let query = supabase
+    let query = getSupabase()
       .from('punches')
       .select(PUNCH_SELECT)
       .order('punched_at', { ascending: false })
@@ -353,7 +369,7 @@ app.get('/api/punches/today', requireDb, async (_req, res) => {
     const end = new Date();
     end.setHours(23, 59, 59, 999);
 
-    const { data, error } = await supabase
+    const { data, error } = await getSupabase()
       .from('punches')
       .select(PUNCH_SELECT)
       .gte('punched_at', start.toISOString())
@@ -370,7 +386,7 @@ app.get('/api/punches/today', requireDb, async (_req, res) => {
 
 app.get('/api/hours', requireDb, async (_req, res) => {
   try {
-    const { data, error } = await supabase
+    const { data, error } = await getSupabase()
       .from('cafe_hours')
       .select('day_of_week, is_closed, open_time, close_time')
       .order('day_of_week');
@@ -396,7 +412,7 @@ app.put('/api/hours', requireDb, async (req, res) => {
       close_time: row.is_closed ? null : row.close_time || null,
     }));
 
-    const { data, error } = await supabase
+    const { data, error } = await getSupabase()
       .from('cafe_hours')
       .upsert(payload, { onConflict: 'day_of_week' })
       .select('day_of_week, is_closed, open_time, close_time')
@@ -412,7 +428,7 @@ app.put('/api/hours', requireDb, async (req, res) => {
 app.get('/api/roster', requireDb, async (req, res) => {
   try {
     const weekStart = req.query.week_start;
-    let query = supabase
+    let query = getSupabase()
       .from('roster_assignments')
       .select(
         'id, week_start, day_of_week, staff_id, section, staff:staff_id(id, name, role)'
@@ -445,7 +461,7 @@ app.put('/api/roster/:day', requireDb, async (req, res) => {
     const kitchen = Array.isArray(req.body?.kitchen) ? req.body.kitchen : [];
     const barista = Array.isArray(req.body?.barista) ? req.body.barista : [];
 
-    const { error: delError } = await supabase
+    const { error: delError } = await getSupabase()
       .from('roster_assignments')
       .delete()
       .eq('day_of_week', day)
@@ -468,13 +484,13 @@ app.put('/api/roster/:day', requireDb, async (req, res) => {
     ];
 
     if (rows.length) {
-      const { error: insError } = await supabase
+      const { error: insError } = await getSupabase()
         .from('roster_assignments')
         .insert(rows);
       if (insError) throw insError;
     }
 
-    const { data, error } = await supabase
+    const { data, error } = await getSupabase()
       .from('roster_assignments')
       .select(
         'id, week_start, day_of_week, staff_id, section, staff:staff_id(id, name, role)'
@@ -512,13 +528,13 @@ app.get('/api/performance', requireDb, async (req, res) => {
       start.setDate(start.getDate() - (days - 1));
     }
 
-    const { data: staff, error: staffError } = await supabase
+    const { data: staff, error: staffError } = await getSupabase()
       .from('staff')
       .select('id, name, role, active')
       .eq('active', true);
     if (staffError) throw staffError;
 
-    let punchQuery = supabase
+    let punchQuery = getSupabase()
       .from('punches')
       .select(PUNCH_SELECT)
       .gte('punched_at', start.toISOString())
