@@ -5,13 +5,20 @@
 
 [build.environment]
   NODE_VERSION = "22"
-  # Set real values in Netlify UI (Site settings → Environment variables).
-  # Names expected by the API function:
-  # SUPABASE_URL
-  # SUPABASE_ANON_KEY
+  SUPABASE_URL = "https://vpqsmvxcssyqrfsfvcrt.supabase.co"
+  SUPABASE_ANON_KEY = "sb_publishable_qwE681JAEkSjQQIAkhFnpA_leV6OQzE"
+  VITE_SUPABASE_URL = "https://vpqsmvxcssyqrfsfvcrt.supabase.co"
+  VITE_SUPABASE_PUBLISHABLE_KEY = "sb_publishable_qwE681JAEkSjQQIAkhFnpA_leV6OQzE"
+
+[context.production.environment]
+  SUPABASE_URL = "https://vpqsmvxcssyqrfsfvcrt.supabase.co"
+  SUPABASE_ANON_KEY = "sb_publishable_qwE681JAEkSjQQIAkhFnpA_leV6OQzE"
+
+[context.deploy-preview.environment]
+  SUPABASE_URL = "https://vpqsmvxcssyqrfsfvcrt.supabase.co"
+  SUPABASE_ANON_KEY = "sb_publishable_qwE681JAEkSjQQIAkhFnpA_leV6OQzE"
 
 [functions]
-  # zisi keeps process.env dynamic (esbuild can bake empty env at build time)
   node_bundler = "zisi"
   included_files = ["server/src/**"]
 

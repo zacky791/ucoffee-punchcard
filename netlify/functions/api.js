@@ -1,4 +1,23 @@
 const path = require('path');
+
+// Fallback if Netlify UI env vars did not inject into the Function runtime.
+// Prefer real process.env when present.
+(function ensureSupabaseEnv() {
+  const env = process.env;
+  if (!env['SUPABASE_URL'] && !env['VITE_SUPABASE_URL']) {
+    env['SUPABASE_URL'] = 'https://vpqsmvxcssyqrfsfvcrt.supabase.co';
+  }
+  if (
+    !env['SUPABASE_ANON_KEY'] &&
+    !env['SUPABASE_PUBLISHABLE_KEY'] &&
+    !env['VITE_SUPABASE_ANON_KEY'] &&
+    !env['VITE_SUPABASE_PUBLISHABLE_KEY']
+  ) {
+    env['SUPABASE_ANON_KEY'] =
+      'sb_publishable_qwE681JAEkSjQQIAkhFnpA_leV6OQzE';
+  }
+})();
+
 const serverless = require('serverless-http');
 
 // Resolve Express/Supabase deps from the server package
