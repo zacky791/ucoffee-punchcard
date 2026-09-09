@@ -54,7 +54,7 @@ export default function History() {
     setError('');
     try {
       const data = await api.getPunches({ limit: '500' });
-      setPunches(data);
+      setPunches(Array.isArray(data) ? data : []);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -76,11 +76,7 @@ export default function History() {
   return (
     <section className="page history-page">
       <header className="page-header">
-        <p className="eyebrow">Records</p>
         <h1>Punch history</h1>
-        <p className="lede">
-          Clock in, clock out, and total time for each person by day.
-        </p>
       </header>
 
       <div className="history-toolbar compact">
@@ -191,7 +187,7 @@ export default function History() {
                                 </button>
                               </div>
                               <p className="history-session-total">
-                                Shift total {formatHoursFromMs(session.ms)}
+                                Total {formatHoursFromMs(session.ms)}
                               </p>
                             </li>
                           ))}

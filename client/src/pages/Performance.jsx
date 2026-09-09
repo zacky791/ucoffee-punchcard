@@ -1,20 +1,87 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api } from '../api';
-import { buildPerformance, formatHours } from '../lib/performance';
+import {
+  addDays,
+  buildPerformance,
+  formatHours,
+  formatWeekRange,
+  startOfWeek,
+} from '../lib/performance';
+import {
+  calcPayRm,
+  formatRm,
+  hourlyRateRm,
+  isKitchenRole,
+} from '../lib/salary';
 import { roleLabel } from '../lib/time';
 
+function withPay(rows) {
+  return rows.map((row) => {
+    const rate = hourlyRateRm(row.name);
+    const pay = calcPayRm(row.total_hours, rate);
+    return { ...row, rate, pay };
+  });
+}
+
+function sectionTotal(rows) {
+  return rows.reduce((sum, row) => sum + (row.pay || 0), 0);
+}
+
+function SalaryCard({ row }) {
+  return (
+    <article className="perf-card salary-card">
+      <strong>{row.name}</strong>
+      <span className="perf-card-role">{roleLabel(row.role)}</span>
+      <p className="perf-card-hours">{formatHours(row.total_hours)}</p>
+      <span className="perf-card-meta">
+        {row.rate != null ? `${formatRm(row.rate)}/hr` : 'Rate not set'}
+        {' · '}
+        {row.days_worked} day{row.days_worked === 1 ? '' : 's'}
+      </span>
+      <p className="salary-pay">{formatRm(row.pay)}</p>
+    </article>
+  );
+}
+
+function SalarySection({ title, rows }) {
+  const total = sectionTotal(rows);
+  return (
+    <section className="salary-section">
+      <header className="salary-section-head">
+        <h2>{title}</h2>
+        <strong>{formatRm(total)}</strong>
+      </header>
+      {rows.length === 0 ? (
+        <p className="state-msg">No staff in this group.</p>
+      ) : (
+        <div className="perf-card-grid">
+          {rows.map((row) => (
+            <SalaryCard key={row.staff_id} row={row} />
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
 export default function Performance() {
-  const [days, setDays] = useState(30);
+  const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date()));
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [payload, setPayload] = useState({ punches: [], staff: [] });
 
-  async function load(selectedDays = days) {
+  const thisWeek = startOfWeek(new Date());
+  const isThisWeek = weekStart === thisWeek;
+
+  async function load(selectedWeek = weekStart) {
     setLoading(true);
     setError('');
     try {
-      const data = await api.getPerformance({ days: String(selectedDays) });
-      setPayload(data);
+      const data = await api.getPerformance({ week_start: selectedWeek });
+      setPayload({
+        punches: Array.isArray(data?.punches) ? data.punches : [],
+        staff: Array.isArray(data?.staff) ? data.staff : [],
+      });
     } catch (err) {
       setError(err.message);
     } finally {
@@ -23,101 +90,98 @@ export default function Performance() {
   }
 
   useEffect(() => {
-    load(days);
+    load(weekStart);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [days]);
+  }, [weekStart]);
 
-  const rows = useMemo(
-    () => buildPerformance(payload.punches || [], payload.staff || []),
-    [payload]
+  const rows = useMemo(() => {
+    const list = buildPerformance(payload.punches || [], payload.staff || []);
+    return withPay([...list].sort((a, b) => a.name.localeCompare(b.name)));
+  }, [payload]);
+
+  const kitchen = useMemo(
+    () => rows.filter((row) => isKitchenRole(row.role)),
+    [rows]
+  );
+  const barista = useMemo(
+    () => rows.filter((row) => !isKitchenRole(row.role)),
+    [rows]
   );
 
-  const totals = useMemo(() => {
-    const hours = rows.reduce((sum, row) => sum + row.total_hours, 0);
-    const punches = rows.reduce((sum, row) => sum + row.punch_count, 0);
-    const onFloor = rows.filter((row) => row.open_now).length;
-    return {
-      hours: Math.round(hours * 10) / 10,
-      punches,
-      onFloor,
-      people: rows.length,
-    };
-  }, [rows]);
+  const grandTotal = sectionTotal(kitchen) + sectionTotal(barista);
+
+  function jumpToDate(value) {
+    if (!value) return;
+    setWeekStart(startOfWeek(new Date(`${value}T12:00:00`)));
+  }
 
   return (
     <section className="page">
       <header className="page-header">
-        <p className="eyebrow">Overview</p>
-        <h1>Performance</h1>
-        <p className="lede">
-          Hours and attendance across the team for the selected period.
-        </p>
+        <h1>Salary table</h1>
       </header>
 
-      <div className="history-toolbar">
-        <label>
-          Period
-          <select
-            value={days}
-            onChange={(e) => setDays(Number(e.target.value))}
+      <div className="week-nav">
+        <button
+          type="button"
+          className="btn ghost compact"
+          onClick={() => setWeekStart(addDays(weekStart, -7))}
+          aria-label="Previous week"
+        >
+          ←
+        </button>
+        <div className="week-nav-label">
+          <strong>{formatWeekRange(weekStart)}</strong>
+        </div>
+        <button
+          type="button"
+          className="btn ghost compact"
+          onClick={() => setWeekStart(addDays(weekStart, 7))}
+          aria-label="Next week"
+        >
+          →
+        </button>
+        {!isThisWeek && (
+          <button
+            type="button"
+            className="btn ghost compact"
+            onClick={() => setWeekStart(thisWeek)}
           >
-            <option value={7}>Last 7 days</option>
-            <option value={14}>Last 14 days</option>
-            <option value={30}>Last 30 days</option>
-            <option value={60}>Last 60 days</option>
-          </select>
+            Today
+          </button>
+        )}
+        <label className="week-jump">
+          Calendar
+          <input
+            type="date"
+            value={weekStart}
+            onChange={(e) => jumpToDate(e.target.value)}
+          />
         </label>
-        <button type="button" className="btn ghost" onClick={() => load(days)}>
+        <button
+          type="button"
+          className="btn ghost compact"
+          onClick={() => load(weekStart)}
+        >
           Refresh
         </button>
       </div>
 
       {error && <p className="banner error">{error}</p>}
 
-      <div className="perf-stats">
-        <div className="perf-stat">
-          <span>Total hours</span>
-          <strong>{formatHours(totals.hours)}</strong>
-        </div>
-        <div className="perf-stat">
-          <span>Punches</span>
-          <strong>{totals.punches}</strong>
-        </div>
-        <div className="perf-stat">
-          <span>Active people</span>
-          <strong>{totals.people}</strong>
-        </div>
-        <div className="perf-stat">
-          <span>On floor now</span>
-          <strong>{totals.onFloor}</strong>
-        </div>
-      </div>
-
       {loading ? (
-        <p className="state-msg">Loading performance…</p>
+        <p className="state-msg">Loading salary…</p>
       ) : rows.length === 0 ? (
-        <p className="state-msg">No punch data in this period.</p>
+        <p className="state-msg">No staff found.</p>
       ) : (
-        <ul className="perf-list">
-          {rows.map((row) => (
-            <li key={row.staff_id}>
-              <div className="perf-who">
-                <strong>{row.name}</strong>
-                <span>
-                  {roleLabel(row.role)}
-                  {row.open_now ? ' · on floor' : ''}
-                </span>
-              </div>
-              <div className="perf-metrics">
-                <span className="tag in">{formatHours(row.total_hours)}</span>
-                <span className="perf-meta">
-                  {row.days_worked} days · {row.sessions} shifts · {row.punch_count}{' '}
-                  punches
-                </span>
-              </div>
-            </li>
-          ))}
-        </ul>
+        <div className="salary-board">
+          <div className="salary-grand">
+            <span>Week total</span>
+            <strong>{formatRm(grandTotal)}</strong>
+          </div>
+          <SalarySection title="Kitchen" rows={kitchen} />
+          <SalarySection title="Barista" rows={barista} />
+        </div>
       )}
     </section>
   );

@@ -1,8 +1,9 @@
-import { NavLink, Route, Routes } from 'react-router-dom';
+import { NavLink, Navigate, Route, Routes } from 'react-router-dom';
 import PunchKiosk from './pages/PunchKiosk';
 import StaffAdmin from './pages/StaffAdmin';
-import History from './pages/History';
+import Proof from './pages/Proof';
 import Performance from './pages/Performance';
+import WeekOverview from './pages/WeekOverview';
 import Schedule from './pages/Schedule';
 import './App.css';
 
@@ -19,19 +20,24 @@ export default function App() {
           <NavLink to="/" end>
             Punch
           </NavLink>
-          <NavLink to="/performance">Performance</NavLink>
-          <NavLink to="/history">History</NavLink>
-          <NavLink to="/schedule">Schedule</NavLink>
+          <NavLink to="/working-schedule">Working schedule</NavLink>
+          <NavLink to="/planning">Planning</NavLink>
+          <NavLink to="/salary">Salary table</NavLink>
           <NavLink to="/staff">Staff</NavLink>
         </nav>
       </header>
       <main className="app-main">
         <Routes>
           <Route path="/" element={<PunchKiosk />} />
-          <Route path="/performance" element={<Performance />} />
-          <Route path="/history" element={<History />} />
-          <Route path="/schedule" element={<Schedule />} />
+          <Route path="/working-schedule" element={<WeekOverview />} />
+          <Route path="/planning" element={<Schedule />} />
+          <Route path="/proof" element={<Proof />} />
+          <Route path="/salary" element={<Performance />} />
           <Route path="/staff" element={<StaffAdmin />} />
+          <Route path="/history" element={<Navigate to="/proof" replace />} />
+          <Route path="/performance" element={<Navigate to="/salary" replace />} />
+          <Route path="/week" element={<Navigate to="/working-schedule" replace />} />
+          <Route path="/schedule" element={<Navigate to="/planning" replace />} />
         </Routes>
       </main>
     </div>

@@ -4,6 +4,7 @@ import LocationMap, {
   getCurrentPosition,
   reverseGeocode,
 } from '../components/LocationMap';
+import { CAFE_ZONE, checkZone } from '../lib/geofence';
 import { formatDate, formatTime, roleLabel, useClock } from '../lib/time';
 import { initials, staffPhoto } from '../lib/staff';
 
@@ -19,6 +20,7 @@ function isKitchen(role) {
 
 function PunchResult({ result, onClose }) {
   const punch = result.punch;
+  const zone = checkZone(punch?.latitude, punch?.longitude);
   return (
     <div className="pin-overlay" role="dialog" aria-modal="true">
       <div className="result-sheet">
@@ -32,6 +34,9 @@ function PunchResult({ result, onClose }) {
           longitude={punch?.longitude}
           label={punch?.location_label || result.staff_name}
           height={240}
+          showZone
+          zone={CAFE_ZONE}
+          within={zone.within}
         />
         {punch?.location_label && (
           <p className="map-address">{punch.location_label}</p>
@@ -57,6 +62,11 @@ function PunchPreview({
 }) {
   const action = person.is_clocked_in ? 'Clock out' : 'Clock in';
   const photo = staffPhoto(person.name);
+  const zone = location
+    ? checkZone(location.latitude, location.longitude)
+    : null;
+  const outside = zone && zone.within === false;
+  const canConfirm = Boolean(location) && !loadingLocation && !confirming && !outside;
 
   return (
     <div className="pin-overlay" role="dialog" aria-modal="true">
@@ -94,8 +104,16 @@ function PunchPreview({
               latitude={location.latitude}
               longitude={location.longitude}
               label={location.location_label || person.name}
-              height={240}
+              height={260}
+              showZone
+              zone={CAFE_ZONE}
+              within={zone?.within}
             />
+            <p className={`zone-status ${outside ? 'outside' : 'inside'}`}>
+              {outside
+                ? `Outside safe area · ${zone.distance_m}m away (max ${CAFE_ZONE.radiusMeters}m)`
+                : `Inside safe area · ${zone.distance_m}m from cafe`}
+            </p>
             {location.location_label && (
               <p className="map-address">{location.location_label}</p>
             )}
@@ -105,6 +123,13 @@ function PunchPreview({
               </p>
             )}
           </>
+        )}
+
+        {outside && (
+          <p className="banner error">
+            You must be within {CAFE_ZONE.radiusMeters}m of U Coffee to{' '}
+            {action.toLowerCase()}. Move closer and retry GPS.
+          </p>
         )}
 
         {confirmError && <p className="banner error">{confirmError}</p>}
@@ -122,9 +147,9 @@ function PunchPreview({
             type="button"
             className="btn primary wide"
             onClick={onConfirm}
-            disabled={!location || loadingLocation || confirming}
+            disabled={!canConfirm}
           >
-            {confirming ? 'Saving…' : action}
+            {confirming ? 'Saving…' : outside ? 'Blocked outside zone' : action}
           </button>
         </div>
       </div>
@@ -182,7 +207,10 @@ export default function PunchKiosk() {
       const data = await api.getStaff();
       if (mounted.current) setStaff(data);
     } catch (err) {
-      if (mounted.current) setLoadError(err.message);
+      if (mounted.current) {
+        setStaff([]);
+        setLoadError(err.message || 'Failed to load staff');
+      }
     } finally {
       if (mounted.current) setLoading(false);
     }
@@ -237,6 +265,13 @@ export default function PunchKiosk() {
 
   async function confirmPunch() {
     if (!previewPerson || !location || confirming) return;
+    const zone = checkZone(location.latitude, location.longitude);
+    if (!zone.within) {
+      setConfirmError(
+        `Outside safe area (${zone.distance_m}m away). Must be within ${CAFE_ZONE.radiusMeters}m.`
+      );
+      return;
+    }
     setConfirming(true);
     setConfirmError('');
     try {
@@ -269,9 +304,6 @@ export default function PunchKiosk() {
         <div className="kiosk-brand desktop-only">
           <p className="brand-mark">U Coffee</p>
           <h1>Staff punch</h1>
-          <p className="lede">
-            Tap your name, check the map, then confirm to clock in or out.
-          </p>
         </div>
         <div className="kiosk-clock" aria-live="polite">
           <p className="clock-time">{formatTime(now)}</p>

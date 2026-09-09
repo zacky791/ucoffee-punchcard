@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { CAFE_ZONE, checkZone } from './lib/geofence';
 
 const supabaseUrl =
   import.meta.env.VITE_SUPABASE_URL ||
@@ -57,7 +58,17 @@ async function request(path, options = {}) {
     },
     ...options,
   });
-  const data = await res.json().catch(() => ({}));
+  const text = await res.text();
+  let data = {};
+  try {
+    data = text ? JSON.parse(text) : {};
+  } catch {
+    throw new Error(
+      res.ok
+        ? 'API returned non-JSON (check Netlify /api redirects)'
+        : `Request failed (${res.status})`
+    );
+  }
   if (!res.ok) {
     throw new Error(data.error || `Request failed (${res.status})`);
   }
@@ -134,6 +145,13 @@ async function punchDirect(body) {
   if (latitude == null || longitude == null) {
     throw new Error(
       'Location is required to clock in or out. Please allow GPS access.'
+    );
+  }
+
+  const zone = checkZone(latitude, longitude, CAFE_ZONE);
+  if (!zone.within) {
+    throw new Error(
+      `Outside safe area (${zone.distance_m}m away). Must be within ${CAFE_ZONE.radiusMeters}m of U Coffee.`
     );
   }
 
@@ -317,10 +335,24 @@ async function saveRosterDayDirect(day, body) {
 
 async function getPerformanceDirect(params = {}) {
   requireSupabase();
-  const days = Math.min(Math.max(Number(params.days) || 30, 1), 90);
-  const start = new Date();
-  start.setHours(0, 0, 0, 0);
-  start.setDate(start.getDate() - (days - 1));
+  const weekStart = String(params.week_start || '');
+  let start;
+  let end = null;
+  let days;
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(weekStart)) {
+    start = new Date(`${weekStart}T00:00:00`);
+    if (Number.isNaN(start.getTime())) throw new Error('Invalid week_start');
+    end = new Date(start);
+    end.setDate(end.getDate() + 6);
+    end.setHours(23, 59, 59, 999);
+    days = 7;
+  } else {
+    days = Math.min(Math.max(Number(params.days) || 30, 1), 90);
+    start = new Date();
+    start.setHours(0, 0, 0, 0);
+    start.setDate(start.getDate() - (days - 1));
+  }
 
   const { data: staff, error: staffError } = await supabase
     .from('staff')
@@ -328,19 +360,28 @@ async function getPerformanceDirect(params = {}) {
     .eq('active', true);
   if (staffError) throw new Error(staffError.message);
 
-  const { data: punches, error: punchError } = await supabase
+  let punchQuery = supabase
     .from('punches')
     .select(PUNCH_SELECT)
     .gte('punched_at', start.toISOString())
     .order('punched_at', { ascending: true });
+  if (end) punchQuery = punchQuery.lte('punched_at', end.toISOString());
+
+  const { data: punches, error: punchError } = await punchQuery;
   if (punchError) throw new Error(punchError.message);
 
   return {
     days,
+    week_start: weekStart || null,
     from: start.toISOString(),
+    to: end ? end.toISOString() : null,
     punches: punches || [],
     staff: staff || [],
   };
+}
+
+function asArray(value) {
+  return Array.isArray(value) ? value : [];
 }
 
 export const api = {
@@ -348,8 +389,8 @@ export const api = {
     if (useDirectSupabase) return { ok: true, service: 'u-coffee-direct', db: true };
     return request('/api/health');
   },
-  getStaff: () =>
-    useDirectSupabase ? getStaffDirect() : request('/api/staff'),
+  getStaff: async () =>
+    asArray(await (useDirectSupabase ? getStaffDirect() : request('/api/staff'))),
   createStaff: (body) =>
     useDirectSupabase
       ? createStaffDirect(body)
@@ -365,15 +406,17 @@ export const api = {
     useDirectSupabase
       ? punchDirect(body)
       : request('/api/punch', { method: 'POST', body: JSON.stringify(body) }),
-  getPunches: (params = {}) => {
-    if (useDirectSupabase) return getPunchesDirect(params);
+  getPunches: async (params = {}) => {
+    if (useDirectSupabase) return asArray(await getPunchesDirect(params));
     const qs = new URLSearchParams(params).toString();
-    return request(`/api/punches${qs ? `?${qs}` : ''}`);
+    return asArray(await request(`/api/punches${qs ? `?${qs}` : ''}`));
   },
-  getToday: () =>
-    useDirectSupabase ? getTodayDirect() : request('/api/punches/today'),
-  getHours: () =>
-    useDirectSupabase ? getHoursDirect() : request('/api/hours'),
+  getToday: async () =>
+    asArray(
+      await (useDirectSupabase ? getTodayDirect() : request('/api/punches/today'))
+    ),
+  getHours: async () =>
+    asArray(await (useDirectSupabase ? getHoursDirect() : request('/api/hours'))),
   saveHours: (hours) =>
     useDirectSupabase
       ? saveHoursDirect(hours)
@@ -381,10 +424,10 @@ export const api = {
           method: 'PUT',
           body: JSON.stringify(hours),
         }),
-  getRoster: (params = {}) => {
-    if (useDirectSupabase) return getRosterDirect(params);
+  getRoster: async (params = {}) => {
+    if (useDirectSupabase) return asArray(await getRosterDirect(params));
     const qs = new URLSearchParams(params).toString();
-    return request(`/api/roster${qs ? `?${qs}` : ''}`);
+    return asArray(await request(`/api/roster${qs ? `?${qs}` : ''}`));
   },
   saveRosterDay: (day, body) =>
     useDirectSupabase
@@ -393,9 +436,20 @@ export const api = {
           method: 'PUT',
           body: JSON.stringify(body),
         }),
-  getPerformance: (params = {}) => {
-    if (useDirectSupabase) return getPerformanceDirect(params);
-    const qs = new URLSearchParams(params).toString();
-    return request(`/api/performance${qs ? `?${qs}` : ''}`);
+  getPerformance: async (params = {}) => {
+    const data = await (useDirectSupabase
+      ? getPerformanceDirect(params)
+      : request(
+          `/api/performance${
+            new URLSearchParams(params).toString()
+              ? `?${new URLSearchParams(params)}`
+              : ''
+          }`
+        ));
+    return {
+      ...(data && typeof data === 'object' ? data : {}),
+      punches: asArray(data?.punches),
+      staff: asArray(data?.staff),
+    };
   },
 };

@@ -64,13 +64,85 @@ export function buildPerformance(punches = [], staffList = []) {
       role: row.role,
       punch_count: row.punch_count,
       days_worked: row.days.size,
-      sessions: row.sessions.length,
       total_ms: row.total_ms,
       total_hours: Math.round((row.total_ms / 3600000) * 10) / 10,
       open_now: Boolean(row.open_session),
     }))
     .filter((row) => row.punch_count > 0 || staffList.some((s) => s.id === row.staff_id))
     .sort((a, b) => b.total_ms - a.total_ms || a.name.localeCompare(b.name));
+}
+
+function toLocalDateKey(iso) {
+  const d = new Date(iso);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+/** Punches for one local calendar day. */
+export function punchesForDate(punches = [], dateKey) {
+  return punches.filter((p) => toLocalDateKey(p.punched_at) === dateKey);
+}
+
+/**
+ * Week attendance board: each day with who worked, who was scheduled but
+ * did not punch, and cafe closed status.
+ */
+export function buildWeekAttendance({
+  weekStart,
+  punches = [],
+  staff = [],
+  roster = [],
+  hours = [],
+} = {}) {
+  const staffMap = new Map(staff.map((s) => [s.id, s]));
+
+  return DAY_ORDER.map((dayOfWeek) => {
+    const dateKey = dateForWeekDay(weekStart, dayOfWeek);
+    const dayHours =
+      hours.find((h) => Number(h.day_of_week) === dayOfWeek) || null;
+    const isClosed = Boolean(dayHours?.is_closed);
+    const dayPunches = punchesForDate(punches, dateKey);
+    const worked = buildDayStaffSummaries(dayPunches);
+    const workedIds = new Set(worked.map((w) => w.staff_id));
+
+    const scheduledIds = [
+      ...new Set(
+        roster
+          .filter((r) => Number(r.day_of_week) === dayOfWeek)
+          .map((r) => r.staff_id)
+      ),
+    ];
+
+    const missed = scheduledIds
+      .filter((id) => !workedIds.has(id))
+      .map((id) => {
+        const person = staffMap.get(id);
+        const assignment = roster.find(
+          (r) => Number(r.day_of_week) === dayOfWeek && r.staff_id === id
+        );
+        return {
+          staff_id: id,
+          name: person?.name || assignment?.staff?.name || 'Unknown',
+          role: person?.role || assignment?.staff?.role || '',
+          section: assignment?.section || '',
+        };
+      })
+      .sort((a, b) => a.name.localeCompare(b.name));
+
+    return {
+      day_of_week: dayOfWeek,
+      date: dateKey,
+      is_closed: isClosed,
+      open_time: dayHours?.open_time || null,
+      close_time: dayHours?.close_time || null,
+      worked,
+      missed,
+      worked_count: worked.length,
+      missed_count: missed.length,
+    };
+  });
 }
 
 export function formatHours(hours) {

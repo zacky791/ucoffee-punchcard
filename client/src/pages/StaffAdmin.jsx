@@ -22,9 +22,7 @@ function StaffLock({ onUnlock }) {
   return (
     <section className="page staff-lock">
       <div className="staff-lock-card">
-        <p className="eyebrow">Restricted</p>
         <h1>Staff access</h1>
-        <p className="lede">Enter the staff PIN to open the directory.</p>
 
         <form className="staff-lock-form" onSubmit={submit}>
           <label>
@@ -68,7 +66,7 @@ export default function StaffAdmin() {
       setError('');
       setLoading(true);
       const data = await api.getStaff();
-      setStaff(data);
+      setStaff(Array.isArray(data) ? data : []);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -120,9 +118,7 @@ export default function StaffAdmin() {
   return (
     <section className="page">
       <header className="page-header">
-        <p className="eyebrow">Team</p>
         <h1>Staff directory</h1>
-        <p className="lede">Add kitchen or barista team members.</p>
       </header>
 
       <div className="history-toolbar compact">

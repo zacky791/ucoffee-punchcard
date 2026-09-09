@@ -19,6 +19,9 @@ export default function LocationMap({
   longitude,
   label = 'Punch location',
   height = 220,
+  showZone = false,
+  zone = null,
+  within = null,
 }) {
   const containerRef = useRef(null);
   const mapRef = useRef(null);
@@ -49,7 +52,33 @@ export default function LocationMap({
       attribution: '&copy; OpenStreetMap',
     }).addTo(map);
 
-    L.marker([latitude, longitude], { icon: markerIcon })
+    if (showZone && zone?.latitude != null && zone?.longitude != null) {
+      const circle = L.circle([zone.latitude, zone.longitude], {
+        radius: zone.radiusMeters || 500,
+        color: '#1f7a55',
+        fillColor: '#1f7a55',
+        fillOpacity: 0.15,
+        weight: 2,
+      }).addTo(map);
+
+      const bounds = circle.getBounds();
+      bounds.extend([latitude, longitude]);
+      map.fitBounds(bounds, { padding: [28, 28], maxZoom: 16 });
+    }
+
+    const markerColor =
+      within === false ? '#8a5244' : within === true ? '#1f7a55' : undefined;
+
+    const icon = markerColor
+      ? L.divIcon({
+          className: 'proof-map-marker',
+          html: `<span style="display:block;width:18px;height:18px;border-radius:50%;background:${markerColor};border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.35)"></span>`,
+          iconSize: [18, 18],
+          iconAnchor: [9, 9],
+        })
+      : markerIcon;
+
+    L.marker([latitude, longitude], { icon })
       .addTo(map)
       .bindPopup(label)
       .openPopup();
@@ -63,7 +92,7 @@ export default function LocationMap({
       map.remove();
       mapRef.current = null;
     };
-  }, [latitude, longitude, label]);
+  }, [latitude, longitude, label, showZone, zone, within]);
 
   if (latitude === null || latitude === undefined || longitude === null || longitude === undefined) {
     return <p className="map-missing">No GPS location saved for this punch.</p>;

@@ -74,8 +74,8 @@ export default function Schedule() {
           return found || DEFAULT_HOURS.find((h) => h.day_of_week === day);
         })
       );
-      setRoster(rosterData || []);
-      setStaff(staffData || []);
+      setRoster(Array.isArray(rosterData) ? rosterData : []);
+      setStaff(Array.isArray(staffData) ? staffData : []);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -184,11 +184,7 @@ export default function Schedule() {
   return (
     <section className="page">
       <header className="page-header">
-        <p className="eyebrow">Roster</p>
-        <h1>Schedule</h1>
-        <p className="lede">
-          Choose a week, pick a day, then assign kitchen and barista.
-        </p>
+        <h1>Planning</h1>
       </header>
 
       <div className="week-nav">
@@ -202,7 +198,6 @@ export default function Schedule() {
         </button>
         <div className="week-nav-label">
           <strong>{formatWeekRange(weekStart)}</strong>
-          <span>{isThisWeek ? 'This week' : 'Selected week'}</span>
         </div>
         <button
           type="button"

@@ -45,6 +45,40 @@ const supabase = !isPlaceholder
 const PUNCH_SELECT =
   'id, staff_id, type, punched_at, note, latitude, longitude, accuracy, location_label, staff:staff_id(id, name, role)';
 
+const CAFE_ZONE = {
+  // Persiaran Panglima Hitam, Setia Alam Impian, Section 35, Shah Alam
+  latitude: Number(process.env.CAFE_LAT) || 3.028353,
+  longitude: Number(process.env.CAFE_LNG) || 101.51512,
+  radiusMeters: Number(process.env.CAFE_RADIUS_M) || 500,
+};
+
+function distanceMeters(lat1, lng1, lat2, lng2) {
+  const toRad = (deg) => (deg * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return 2 * 6371000 * Math.asin(Math.min(1, Math.sqrt(a)));
+}
+
+function assertInsideCafeZone(latitude, longitude) {
+  const distance_m = Math.round(
+    distanceMeters(
+      CAFE_ZONE.latitude,
+      CAFE_ZONE.longitude,
+      Number(latitude),
+      Number(longitude)
+    )
+  );
+  if (distance_m > CAFE_ZONE.radiusMeters) {
+    return {
+      error: `Outside safe area (${distance_m}m away). Must be within ${CAFE_ZONE.radiusMeters}m of U Coffee.`,
+    };
+  }
+  return { distance_m };
+}
+
 const ROLE_ORDER = {
   head_chef: 1,
   assistant_chef: 2,
@@ -215,6 +249,11 @@ app.post('/api/punch', requireDb, async (req, res) => {
       return res.status(400).json({
         error: 'Location is required to clock in or out. Please allow GPS access.',
       });
+    }
+
+    const zoneCheck = assertInsideCafeZone(location.latitude, location.longitude);
+    if (zoneCheck.error) {
+      return res.status(403).json({ error: zoneCheck.error });
     }
 
     const { data: person, error: staffError } = await supabase
@@ -447,10 +486,26 @@ app.put('/api/roster/:day', requireDb, async (req, res) => {
 
 app.get('/api/performance', requireDb, async (req, res) => {
   try {
-    const days = Math.min(Math.max(Number(req.query.days) || 30, 1), 90);
-    const start = new Date();
-    start.setHours(0, 0, 0, 0);
-    start.setDate(start.getDate() - (days - 1));
+    const weekStart = String(req.query.week_start || '');
+    let start;
+    let end = null;
+    let days;
+
+    if (/^\d{4}-\d{2}-\d{2}$/.test(weekStart)) {
+      start = new Date(`${weekStart}T00:00:00`);
+      if (Number.isNaN(start.getTime())) {
+        return res.status(400).json({ error: 'Invalid week_start' });
+      }
+      end = new Date(start);
+      end.setDate(end.getDate() + 6);
+      end.setHours(23, 59, 59, 999);
+      days = 7;
+    } else {
+      days = Math.min(Math.max(Number(req.query.days) || 30, 1), 90);
+      start = new Date();
+      start.setHours(0, 0, 0, 0);
+      start.setDate(start.getDate() - (days - 1));
+    }
 
     const { data: staff, error: staffError } = await supabase
       .from('staff')
@@ -458,16 +513,21 @@ app.get('/api/performance', requireDb, async (req, res) => {
       .eq('active', true);
     if (staffError) throw staffError;
 
-    const { data: punches, error: punchError } = await supabase
+    let punchQuery = supabase
       .from('punches')
       .select(PUNCH_SELECT)
       .gte('punched_at', start.toISOString())
       .order('punched_at', { ascending: true });
+    if (end) punchQuery = punchQuery.lte('punched_at', end.toISOString());
+
+    const { data: punches, error: punchError } = await punchQuery;
     if (punchError) throw punchError;
 
     res.json({
       days,
+      week_start: weekStart || null,
       from: start.toISOString(),
+      to: end ? end.toISOString() : null,
       punches: punches || [],
       staff: staff || [],
     });
