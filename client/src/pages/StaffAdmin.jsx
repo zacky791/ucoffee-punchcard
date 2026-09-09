@@ -2,7 +2,13 @@ import { useEffect, useState } from 'react';
 import { api } from '../api';
 import { roleLabel } from '../lib/time';
 
-const KITCHEN_ROLES = new Set(['head_chef', 'assistant_chef', 'kitchen']);
+const KITCHEN_ROLES = new Set([
+  'head_chef',
+  'assistant_chef',
+  'assistant_manager',
+  'manager',
+  'kitchen',
+]);
 const STAFF_PIN = String(import.meta.env.VITE_STAFF_PIN || '9897');
 
 function StaffLock({ onUnlock }) {
@@ -148,6 +154,8 @@ export default function StaffAdmin() {
             onChange={(e) => setForm((f) => ({ ...f, role: e.target.value }))}
           >
             <option value="head_chef">Head chef</option>
+            <option value="manager">Manager</option>
+            <option value="assistant_manager">Assistant manager</option>
             <option value="assistant_chef">Assistant chef</option>
             <option value="barista">Barista</option>
             <option value="kitchen">Kitchen</option>

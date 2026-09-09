@@ -26,10 +26,11 @@ const PUNCH_SELECT =
 
 const ROLE_ORDER = {
   head_chef: 1,
-  assistant_chef: 2,
-  kitchen: 3,
-  shift_lead: 4,
-  manager: 5,
+  manager: 2,
+  assistant_manager: 3,
+  assistant_chef: 4,
+  kitchen: 5,
+  shift_lead: 6,
   barista: 10,
 };
 

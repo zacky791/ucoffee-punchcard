@@ -79,12 +79,6 @@ export default function History() {
         <h1>Punch history</h1>
       </header>
 
-      <div className="history-toolbar compact">
-        <button type="button" className="btn ghost" onClick={load}>
-          Refresh
-        </button>
-      </div>
-
       {error && <p className="banner error">{error}</p>}
       {loading ? (
         <p className="state-msg">Loading punches…</p>

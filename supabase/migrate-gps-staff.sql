@@ -12,8 +12,8 @@ update staff set active = false where active = true;
 
 insert into staff (name, pin, role, active) values
   ('Haziq', '0000', 'head_chef', true),
-  ('Arash Abdullah', '0000', 'assistant_chef', true),
-  ('Azim', '0000', 'assistant_chef', true),
+  ('Arash Abdullah', '0000', 'manager', true),
+  ('Azim', '0000', 'assistant_manager', true),
   ('Nadhirah', '0000', 'assistant_chef', true),
   ('Faqih', '0000', 'barista', true),
   ('Zakaria', '0000', 'barista', true);

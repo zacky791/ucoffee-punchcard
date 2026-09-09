@@ -85,9 +85,6 @@ export default function Proof() {
             Outside ({outsideCount})
           </button>
         </div>
-        <button type="button" className="btn ghost" onClick={load}>
-          Refresh
-        </button>
       </div>
 
       {error && <p className="banner error">{error}</p>}

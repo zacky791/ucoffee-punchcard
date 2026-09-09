@@ -6,6 +6,7 @@ import {
   addDays,
   buildWeekAttendance,
   formatDayDate,
+  formatWeekMonth,
   formatWeekRange,
   startOfWeek,
   toDateKey,
@@ -24,6 +25,7 @@ export default function WeekOverview() {
   const thisWeek = startOfWeek(new Date());
   const isThisWeek = weekStart === thisWeek;
   const todayKey = toDateKey(new Date());
+  const monthLabel = formatWeekMonth(weekStart);
 
   async function load(selectedWeek = weekStart) {
     setLoading(true);
@@ -74,49 +76,49 @@ export default function WeekOverview() {
       </header>
 
       <div className="week-nav">
-        <button
-          type="button"
-          className="btn ghost compact"
-          onClick={() => setWeekStart(addDays(weekStart, -7))}
-          aria-label="Previous week"
-        >
-          ←
-        </button>
-        <div className="week-nav-label">
-          <strong>{formatWeekRange(weekStart)}</strong>
+        <div className="week-nav-block">
+          <span className="week-nav-title">Week</span>
+          <div className="week-nav-row">
+            <button
+              type="button"
+              className="btn ghost compact"
+              onClick={() => setWeekStart(addDays(weekStart, -7))}
+              aria-label="Previous week"
+            >
+              ←
+            </button>
+            <div className="week-nav-label">
+              <strong>{formatWeekRange(weekStart)}</strong>
+            </div>
+            <button
+              type="button"
+              className="btn ghost compact"
+              onClick={() => setWeekStart(addDays(weekStart, 7))}
+              aria-label="Next week"
+            >
+              →
+            </button>
+            {!isThisWeek && (
+              <button
+                type="button"
+                className="btn ghost compact"
+                onClick={() => setWeekStart(thisWeek)}
+              >
+                Today
+              </button>
+            )}
+          </div>
         </div>
-        <button
-          type="button"
-          className="btn ghost compact"
-          onClick={() => setWeekStart(addDays(weekStart, 7))}
-          aria-label="Next week"
-        >
-          →
-        </button>
-        {!isThisWeek && (
-          <button
-            type="button"
-            className="btn ghost compact"
-            onClick={() => setWeekStart(thisWeek)}
-          >
-            Today
-          </button>
-        )}
-        <label className="week-jump">
-          Calendar
+        <div className="week-nav-block">
+          <span className="week-nav-title">Calendar</span>
           <input
             type="date"
+            className="week-jump-input"
             value={weekStart}
             onChange={(e) => jumpToDate(e.target.value)}
+            aria-label="Jump to calendar date"
           />
-        </label>
-        <button
-          type="button"
-          className="btn ghost compact"
-          onClick={() => load(weekStart)}
-        >
-          Refresh
-        </button>
+        </div>
       </div>
 
       {error && <p className="banner error">{error}</p>}
@@ -124,52 +126,64 @@ export default function WeekOverview() {
       {loading ? (
         <p className="state-msg">Loading week…</p>
       ) : (
-        <div className="week-card-grid">
-          {days.map((day) => (
-            <article
-              key={day.date}
-              className={`week-mini-card ${
-                day.date === todayKey ? 'is-today' : ''
-              } ${day.is_closed ? 'is-closed' : ''}`}
-            >
-              <header className="week-mini-head">
-                <strong>{DAY_SHORT[day.day_of_week]}</strong>
-                <span>{formatDayDate(day.date)}</span>
-                {day.is_closed && <em>Closed</em>}
-              </header>
+        <>
+          <p className="week-month-label">{monthLabel}</p>
+          <div className="week-card-grid">
+            {days.map((day) => (
+              <article
+                key={day.date}
+                className={`week-mini-card ${
+                  day.date === todayKey ? 'is-today' : ''
+                } ${day.is_closed ? 'is-closed' : ''}`}
+              >
+                <header className="week-mini-head">
+                  <strong>{DAY_SHORT[day.day_of_week]}</strong>
+                  <span className="week-mini-daynum">
+                    <span className="week-mini-daynum-short">
+                      {parseInt(day.date.slice(8), 10)}
+                    </span>
+                    <span className="week-mini-daynum-full">
+                      {formatDayDate(day.date)}
+                    </span>
+                  </span>
+                  {day.is_closed && <em>Closed</em>}
+                </header>
 
-              {day.worked.length === 0 && day.missed.length === 0 ? (
-                <p className="week-mini-empty">—</p>
-              ) : (
-                <ul className="week-mini-list">
-                  {day.worked.map((person) => (
-                    <li key={person.staff_id} className="week-mini-worked">
-                      <strong>{person.name}</strong>
-                      <span className="week-mini-in">
-                        In {person.in_label || '—'}
-                      </span>
-                      <span className="week-mini-meta">
-                        Out{' '}
-                        {person.still_in
-                          ? 'still in'
-                          : person.out_label || '—'}
-                        {' · '}
-                        {person.total_label}
-                      </span>
-                    </li>
-                  ))}
-                  {day.missed.map((person) => (
-                    <li key={person.staff_id} className="week-mini-missed">
-                      <strong>{person.name}</strong>
-                      <span>No punch</span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-              <span className="visually-hidden">{DAY_LABELS[day.day_of_week]}</span>
-            </article>
-          ))}
-        </div>
+                {day.worked.length === 0 && day.missed.length === 0 ? (
+                  <p className="week-mini-empty">—</p>
+                ) : (
+                  <ul className="week-mini-list">
+                    {day.worked.map((person) => (
+                      <li key={person.staff_id} className="week-mini-worked">
+                        <strong>{person.name}</strong>
+                        <span className="week-mini-in">
+                          In {person.in_label || '—'}
+                        </span>
+                        <span className="week-mini-meta">
+                          Out{' '}
+                          {person.still_in
+                            ? 'still in'
+                            : person.out_label || '—'}
+                          {' · '}
+                          {person.total_label}
+                        </span>
+                      </li>
+                    ))}
+                    {day.missed.map((person) => (
+                      <li key={person.staff_id} className="week-mini-missed">
+                        <strong>{person.name}</strong>
+                        <span>No punch</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <span className="visually-hidden">
+                  {DAY_LABELS[day.day_of_week]}
+                </span>
+              </article>
+            ))}
+          </div>
+        </>
       )}
     </section>
   );

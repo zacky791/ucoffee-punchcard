@@ -278,13 +278,44 @@ export function parseDateKey(dateKey) {
 export function formatWeekRange(weekStart) {
   const start = parseDateKey(weekStart);
   const end = parseDateKey(addDays(weekStart, 6));
-  const opts = { month: 'short', day: 'numeric' };
-  const startLabel = start.toLocaleDateString(undefined, opts);
+  const sameMonth =
+    start.getMonth() === end.getMonth() &&
+    start.getFullYear() === end.getFullYear();
+  if (sameMonth) {
+    const month = start.toLocaleDateString(undefined, { month: 'long' });
+    return `${month} ${start.getDate()}–${end.getDate()}, ${start.getFullYear()}`;
+  }
+  const startLabel = start.toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+  });
   const endLabel = end.toLocaleDateString(undefined, {
-    ...opts,
+    month: 'short',
+    day: 'numeric',
     year: 'numeric',
   });
   return `${startLabel} – ${endLabel}`;
+}
+
+/** Month label for a week, e.g. "September 2026" */
+export function formatWeekMonth(weekStart) {
+  const start = parseDateKey(weekStart);
+  const end = parseDateKey(addDays(weekStart, 6));
+  if (
+    start.getMonth() === end.getMonth() &&
+    start.getFullYear() === end.getFullYear()
+  ) {
+    return start.toLocaleDateString(undefined, {
+      month: 'long',
+      year: 'numeric',
+    });
+  }
+  const a = start.toLocaleDateString(undefined, { month: 'short' });
+  const b = end.toLocaleDateString(undefined, {
+    month: 'short',
+    year: 'numeric',
+  });
+  return `${a}–${b}`;
 }
 
 export function dateForWeekDay(weekStart, dayOfWeek) {

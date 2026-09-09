@@ -48,8 +48,8 @@ left join lateral (
 
 insert into staff (name, pin, role) values
   ('Haziq', '0000', 'head_chef'),
-  ('Arash Abdullah', '0000', 'assistant_chef'),
-  ('Azim', '0000', 'assistant_chef'),
+  ('Arash Abdullah', '0000', 'manager'),
+  ('Azim', '0000', 'assistant_manager'),
   ('Nadhirah', '0000', 'assistant_chef'),
   ('Faqih', '0000', 'barista'),
   ('Zakaria', '0000', 'barista');

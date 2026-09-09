@@ -16,6 +16,7 @@ export function formatTime(date) {
     hour: 'numeric',
     minute: '2-digit',
     second: '2-digit',
+    hour12: true,
   }).format(date instanceof Date ? date : new Date(date));
 }
 
@@ -40,6 +41,7 @@ export function roleLabel(role) {
   const labels = {
     head_chef: 'Head chef',
     assistant_chef: 'Assistant chef',
+    assistant_manager: 'Assistant manager',
     barista: 'Barista',
     kitchen: 'Kitchen',
     shift_lead: 'Shift lead',

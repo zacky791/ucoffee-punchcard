@@ -122,49 +122,49 @@ export default function Performance() {
       </header>
 
       <div className="week-nav">
-        <button
-          type="button"
-          className="btn ghost compact"
-          onClick={() => setWeekStart(addDays(weekStart, -7))}
-          aria-label="Previous week"
-        >
-          ←
-        </button>
-        <div className="week-nav-label">
-          <strong>{formatWeekRange(weekStart)}</strong>
+        <div className="week-nav-block">
+          <span className="week-nav-title">Week</span>
+          <div className="week-nav-row">
+            <button
+              type="button"
+              className="btn ghost compact"
+              onClick={() => setWeekStart(addDays(weekStart, -7))}
+              aria-label="Previous week"
+            >
+              ←
+            </button>
+            <div className="week-nav-label">
+              <strong>{formatWeekRange(weekStart)}</strong>
+            </div>
+            <button
+              type="button"
+              className="btn ghost compact"
+              onClick={() => setWeekStart(addDays(weekStart, 7))}
+              aria-label="Next week"
+            >
+              →
+            </button>
+            {!isThisWeek && (
+              <button
+                type="button"
+                className="btn ghost compact"
+                onClick={() => setWeekStart(thisWeek)}
+              >
+                Today
+              </button>
+            )}
+          </div>
         </div>
-        <button
-          type="button"
-          className="btn ghost compact"
-          onClick={() => setWeekStart(addDays(weekStart, 7))}
-          aria-label="Next week"
-        >
-          →
-        </button>
-        {!isThisWeek && (
-          <button
-            type="button"
-            className="btn ghost compact"
-            onClick={() => setWeekStart(thisWeek)}
-          >
-            Today
-          </button>
-        )}
-        <label className="week-jump">
-          Calendar
+        <div className="week-nav-block">
+          <span className="week-nav-title">Calendar</span>
           <input
             type="date"
+            className="week-jump-input"
             value={weekStart}
             onChange={(e) => jumpToDate(e.target.value)}
+            aria-label="Jump to calendar date"
           />
-        </label>
-        <button
-          type="button"
-          className="btn ghost compact"
-          onClick={() => load(weekStart)}
-        >
-          Refresh
-        </button>
+        </div>
       </div>
 
       {error && <p className="banner error">{error}</p>}

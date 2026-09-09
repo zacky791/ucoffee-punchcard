@@ -37,6 +37,8 @@ export function formatRm(amount) {
 export const KITCHEN_ROLES = new Set([
   'head_chef',
   'assistant_chef',
+  'assistant_manager',
+  'manager',
   'kitchen',
 ]);
 

@@ -11,6 +11,8 @@ import { initials, staffPhoto } from '../lib/staff';
 const KITCHEN_ROLES = new Set([
   'head_chef',
   'assistant_chef',
+  'assistant_manager',
+  'manager',
   'kitchen',
 ]);
 
@@ -309,7 +311,7 @@ export default function PunchKiosk() {
           <p className="clock-time">{formatTime(now)}</p>
           <p className="clock-date">{formatDate(now)}</p>
           <p className="clock-meta">
-            {onFloor} on floor · {staff.length} active
+            {onFloor} staff at the shop now
           </p>
         </div>
       </header>
