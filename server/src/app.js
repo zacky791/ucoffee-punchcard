@@ -9,11 +9,16 @@ const app = express();
 app.use(cors({ origin: true }));
 app.use(express.json());
 
-const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseUrl =
+  process.env.SUPABASE_URL ||
+  process.env.VITE_SUPABASE_URL ||
+  process.env.VITE_SUPABASE_PROJECT_URL;
 const supabaseKey =
   process.env.SUPABASE_SERVICE_ROLE_KEY ||
   process.env.SUPABASE_ANON_KEY ||
-  process.env.SUPABASE_PUBLISHABLE_KEY;
+  process.env.SUPABASE_PUBLISHABLE_KEY ||
+  process.env.VITE_SUPABASE_ANON_KEY ||
+  process.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
 const isPlaceholder =
   !supabaseUrl ||
@@ -92,7 +97,7 @@ function requireDb(req, res, next) {
   if (!supabase) {
     return res.status(503).json({
       error:
-        'Database not configured. Add SUPABASE_URL and SUPABASE_ANON_KEY (or SERVICE_ROLE_KEY) to server/.env',
+        'Database not configured. On Netlify set SUPABASE_URL and SUPABASE_ANON_KEY (Site settings → Environment variables), then redeploy.',
     });
   }
   next();
