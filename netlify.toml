@@ -11,7 +11,8 @@
   # SUPABASE_ANON_KEY
 
 [functions]
-  node_bundler = "esbuild"
+  # zisi keeps process.env dynamic (esbuild can bake empty env at build time)
+  node_bundler = "zisi"
   included_files = ["server/src/**"]
 
 # API must win over SPA fallback (! = force)

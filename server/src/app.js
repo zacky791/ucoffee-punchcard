@@ -13,17 +13,19 @@ app.use(cors({ origin: true }));
 app.use(express.json());
 
 function readSupabaseConfig() {
+  // Bracket access so esbuild does NOT inline empty values at Netlify build time
+  const env = process.env;
   const url =
-    process.env.SUPABASE_URL ||
-    process.env.VITE_SUPABASE_URL ||
-    process.env.VITE_SUPABASE_PROJECT_URL ||
+    env['SUPABASE_URL'] ||
+    env['VITE_SUPABASE_URL'] ||
+    env['VITE_SUPABASE_PROJECT_URL'] ||
     '';
   const key =
-    process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    process.env.SUPABASE_ANON_KEY ||
-    process.env.SUPABASE_PUBLISHABLE_KEY ||
-    process.env.VITE_SUPABASE_ANON_KEY ||
-    process.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
+    env['SUPABASE_SERVICE_ROLE_KEY'] ||
+    env['SUPABASE_ANON_KEY'] ||
+    env['SUPABASE_PUBLISHABLE_KEY'] ||
+    env['VITE_SUPABASE_ANON_KEY'] ||
+    env['VITE_SUPABASE_PUBLISHABLE_KEY'] ||
     '';
   const placeholder =
     /YOUR_PROJECT_REF|your_project_ref|your_service_role_key|your_anon_key/i.test(
