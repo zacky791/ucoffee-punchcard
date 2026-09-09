@@ -71,11 +71,11 @@
 .brand-glyph {
   width: 1.7rem;
   height: 1.7rem;
-  border-radius: 0.55rem;
-  background:
-    radial-gradient(circle at 35% 30%, #f2d2b0, transparent 45%),
-    linear-gradient(145deg, #c45f1a, #1c2a1f 70%);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.2);
+  border-radius: 0.45rem;
+  object-fit: cover;
+  display: block;
+  background: #d8d8d8;
+  box-shadow: inset 0 0 0 1px rgba(20, 26, 20, 0.08);
 }
 
 .nav-links {
@@ -1271,11 +1271,10 @@ select:focus {
 }
 
 .schedule-day-bar {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  flex-wrap: wrap;
+  gap: 0.75rem 1rem;
 }
 
 .schedule-day-title {
@@ -1288,11 +1287,14 @@ select:focus {
 
 .status-toggle {
   display: inline-flex;
-  width: min(100%, 220px);
+  width: 100%;
+  max-width: 240px;
+  min-width: 0;
   padding: 0.2rem;
   border-radius: 999px;
   background: rgba(28, 42, 31, 0.06);
   border: 1px solid var(--line);
+  box-sizing: border-box;
 }
 
 .status-toggle-btn {
@@ -1301,9 +1303,10 @@ select:focus {
   color: var(--muted);
   font-size: 0.82rem;
   font-weight: 700;
-  padding: 0.45rem 0.85rem;
+  padding: 0.5rem 0.75rem;
   border-radius: 999px;
   flex: 1 1 0;
+  min-width: 0;
   text-align: center;
   transition: background 0.15s ease, color 0.15s ease;
 }
@@ -1330,6 +1333,10 @@ select:focus {
   gap: 0.55rem;
 }
 
+.schedule-actions .btn {
+  max-width: 100%;
+}
+
 .schedule-panel {
   display: grid;
   gap: 1.1rem;
@@ -1338,6 +1345,8 @@ select:focus {
   background: var(--surface);
   border: 1px solid var(--line);
   box-shadow: var(--shadow-soft);
+  min-width: 0;
+  overflow: hidden;
 }
 
 .check-row {
@@ -1352,25 +1361,36 @@ select:focus {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.75rem;
+  min-width: 0;
 }
 
 .hours-grid label {
+  display: grid;
+  gap: 0.45rem;
   min-width: 0;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--muted);
 }
 
 .hours-grid input[type='time'] {
   width: 100%;
   min-width: 0;
+  max-width: 100%;
   box-sizing: border-box;
 }
 
-@media (max-width: 560px) {
+@media (max-width: 720px) {
+  .schedule-panel {
+    padding: 1rem;
+  }
+
   .schedule-day-bar {
-    flex-direction: column;
-    align-items: stretch;
+    grid-template-columns: 1fr;
   }
 
   .status-toggle {
+    max-width: none;
     width: 100%;
   }
 

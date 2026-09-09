@@ -13,7 +13,13 @@ export default function App() {
       <div className="atmosphere" aria-hidden="true" />
       <header className="top-bar">
         <NavLink to="/" end className="nav-brand">
-          <span className="brand-glyph" aria-hidden="true" />
+          <img
+            className="brand-glyph"
+            src="/favicon.png"
+            alt=""
+            width={28}
+            height={28}
+          />
           <span>U Coffee</span>
         </NavLink>
         <nav className="nav-links" aria-label="Main">
