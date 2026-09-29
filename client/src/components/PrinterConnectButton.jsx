@@ -11,6 +11,17 @@ export default function PrinterConnectButton({ onError }) {
 
   useEffect(() => subscribePrinter(setState), []);
 
+  async function pick() {
+    setBusy(true);
+    try {
+      await connectPrinter();
+    } catch (err) {
+      if (err?.name !== 'NotFoundError') onError?.(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   if (state.mode === 'rawbt') {
     return <span className="pos-badge ok">Printer: RawBT app</span>;
   }
@@ -23,23 +34,19 @@ export default function PrinterConnectButton({ onError }) {
     );
   }
 
+  let label = 'Connect printer';
+  if (busy) label = 'Connecting…';
+  else if (state.reconnecting) label = `Reconnecting to ${state.name || 'printer'}…`;
+
   return (
     <button
       type="button"
       className="pos-btn ghost"
       disabled={busy}
-      onClick={async () => {
-        setBusy(true);
-        try {
-          await connectPrinter();
-        } catch (err) {
-          if (err?.name !== 'NotFoundError') onError?.(err.message);
-        } finally {
-          setBusy(false);
-        }
-      }}
+      title={state.reconnecting ? 'Trying to reach the printer. Tap to pick it again.' : undefined}
+      onClick={pick}
     >
-      {busy ? 'Connecting…' : 'Connect printer'}
+      {label}
     </button>
   );
 }

@@ -3,13 +3,17 @@
  *
  * Modes (saved per device in localStorage):
  *  - bluetooth: Chrome Web Bluetooth, direct to BLE printers. Requires HTTPS (or localhost)
- *    and Chrome on Android / desktop. The connection is lost on page reload, so the
- *    cashier taps "Connect printer" again (browsers require a tap to pick a device).
+ *    and Chrome on Android / desktop. The link is kept open and re-established on its own
+ *    after drops (printer sleep, out of range, tab in background). After a page reload it
+ *    is restored where Chrome allows it (navigator.bluetooth.getDevices); otherwise the
+ *    cashier taps "Connect printer" once, since browsers require a tap to pick a device.
  *  - rawbt: hands the ESC/POS bytes to the RawBT Android app, which works with
  *    classic-Bluetooth printers that Web Bluetooth cannot see.
  */
 
 const MODE_KEY = 'ucoffee.printMode';
+const DEVICE_KEY = 'ucoffee.printerDevice';
+const RETRY_DELAYS_MS = [1000, 2000, 4000, 8000, 15000, 30000];
 
 // Service UUIDs used by common cheap BLE thermal printers.
 const PRINTER_SERVICES = [
@@ -26,6 +30,11 @@ const CHUNK_SIZE = 100;
 
 let device = null;
 let characteristic = null;
+let attaching = null;
+let reconnecting = false;
+let retryTimer = null;
+let retryIndex = 0;
+let manualDisconnect = false;
 const listeners = new Set();
 
 function notify() {
@@ -56,6 +65,7 @@ export function getPrinterState() {
     mode: getPrintMode(),
     supported: isBluetoothSupported(),
     connected: Boolean(device?.gatt?.connected && characteristic),
+    reconnecting: reconnecting && !(device?.gatt?.connected && characteristic),
     name: device?.name || null,
   };
 }
@@ -72,10 +82,63 @@ async function findWritable(server) {
   throw new Error('This Bluetooth device has no printable channel. Is it the receipt printer?');
 }
 
-async function attach() {
-  const server = device.gatt.connected ? device.gatt : await device.gatt.connect();
-  characteristic = await findWritable(server);
+/** Connects (or re-uses) the GATT link. Concurrent callers share one attempt. */
+function attach() {
+  if (!device) return Promise.reject(new Error('No printer selected'));
+  if (device.gatt.connected && characteristic) return Promise.resolve();
+  if (!attaching) {
+    attaching = (async () => {
+      const server = device.gatt.connected ? device.gatt : await device.gatt.connect();
+      characteristic = await findWritable(server);
+      reconnecting = false;
+      retryIndex = 0;
+      clearTimeout(retryTimer);
+      notify();
+    })().finally(() => {
+      attaching = null;
+    });
+  }
+  return attaching;
+}
+
+function scheduleReconnect() {
+  if (!device || manualDisconnect || getPrintMode() !== 'bluetooth') return;
+  clearTimeout(retryTimer);
+  reconnecting = true;
   notify();
+  const delay = RETRY_DELAYS_MS[Math.min(retryIndex, RETRY_DELAYS_MS.length - 1)];
+  retryIndex += 1;
+  retryTimer = setTimeout(async () => {
+    if (document.visibilityState === 'hidden') return;
+    try {
+      await attach();
+    } catch {
+      scheduleReconnect();
+    }
+  }, delay);
+}
+
+function onDisconnected() {
+  characteristic = null;
+  notify();
+  scheduleReconnect();
+}
+
+function useDevice(next) {
+  if (device === next) return;
+  device?.removeEventListener('gattserverdisconnected', onDisconnected);
+  device = next;
+  device.addEventListener('gattserverdisconnected', onDisconnected);
+  localStorage.setItem(DEVICE_KEY, JSON.stringify({ id: next.id, name: next.name || null }));
+}
+
+if (typeof document !== 'undefined') {
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible' || !device || manualDisconnect) return;
+    if (getPrinterState().connected) return;
+    retryIndex = 0;
+    attach().catch(scheduleReconnect);
+  });
 }
 
 /** Must be called from a tap (browser shows the device picker). */
@@ -90,13 +153,37 @@ export async function connectPrinter() {
     optionalServices: PRINTER_SERVICES,
   });
   if (device && device !== picked) device.gatt?.disconnect();
-  device = picked;
-  device.addEventListener('gattserverdisconnected', () => {
-    characteristic = null;
-    notify();
-  });
+  manualDisconnect = false;
+  useDevice(picked);
   await attach();
   return getPrinterState();
+}
+
+/**
+ * Silently reconnects to the printer picked earlier (e.g. after a page reload).
+ * Works where Chrome remembers Bluetooth permissions; otherwise does nothing.
+ */
+export async function restorePrinter() {
+  if (device || getPrintMode() !== 'bluetooth' || !isBluetoothSupported()) return;
+  if (typeof navigator.bluetooth.getDevices !== 'function') return;
+  let saved = null;
+  try {
+    saved = JSON.parse(localStorage.getItem(DEVICE_KEY) || 'null');
+  } catch {
+    saved = null;
+  }
+  if (!saved?.id) return;
+  try {
+    const known = await navigator.bluetooth.getDevices();
+    const match = known.find((d) => d.id === saved.id);
+    if (!match) return;
+    manualDisconnect = false;
+    useDevice(match);
+    notify();
+    await attach();
+  } catch {
+    if (device) scheduleReconnect();
+  }
 }
 
 /** Re-links to the last picked printer if the link dropped; no device picker. */
@@ -112,9 +199,14 @@ export async function checkPrinterConnection() {
 }
 
 export function disconnectPrinter() {
+  manualDisconnect = true;
+  clearTimeout(retryTimer);
+  reconnecting = false;
+  device?.removeEventListener('gattserverdisconnected', onDisconnected);
   device?.gatt?.disconnect();
   device = null;
   characteristic = null;
+  localStorage.removeItem(DEVICE_KEY);
   notify();
 }
 

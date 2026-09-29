@@ -227,7 +227,7 @@ function createPosRouter(getSupabase) {
     try {
       let query = req.supabase
         .from('pos_products')
-        .select('*, category:pos_categories(id, name)')
+        .select('*, category:pos_categories(id, name, sort_order)')
         .order('sort_order')
         .order('name');
       if (req.query.active === 'true') query = query.eq('active', true);
@@ -235,7 +235,10 @@ function createPosRouter(getSupabase) {
       const { data, error } = await query;
       if (error) throw error;
 
-      const products = data || [];
+      const catOrder = (p) => p.category?.sort_order ?? Number.MAX_SAFE_INTEGER;
+      const products = (data || []).sort(
+        (a, b) => catOrder(a) - catOrder(b) || a.sort_order - b.sort_order
+      );
       if (!products.length) return res.json([]);
 
       const ids = products.map((p) => p.id);

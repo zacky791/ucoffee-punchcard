@@ -1,5 +1,7 @@
+import { useEffect } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import { CartProvider } from '../../context/CartContext';
+import { restorePrinter } from '../../lib/receiptPrinter';
 import '../../styles/ordering.css';
 
 const NAV = [
@@ -15,6 +17,10 @@ const NAV = [
 ];
 
 export default function OrderingLayout() {
+  useEffect(() => {
+    restorePrinter();
+  }, []);
+
   return (
     <CartProvider>
       <div className="pos-shell">
