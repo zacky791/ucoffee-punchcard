@@ -30,6 +30,8 @@ export default function PosPage() {
   const [modifierProduct, setModifierProduct] = useState(null);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [success, setSuccess] = useState(null);
+  const [cartOpen, setCartOpen] = useState(false);
+  const itemCount = cart.items.reduce((n, item) => n + Number(item.quantity || 0), 0);
 
   useEffect(() => {
     const t = setInterval(() => setClock(nowLabel()), 30000);
@@ -242,8 +244,21 @@ export default function PosPage() {
           )}
         </section>
 
-        <aside className="pos-cart">
-          <h2>Current order</h2>
+        {cartOpen && (
+          <div className="pos-cart-scrim" onClick={() => setCartOpen(false)} aria-hidden="true" />
+        )}
+        <aside className={`pos-cart ${cartOpen ? 'open' : ''}`} aria-label="Current order">
+          <div className="pos-cart-head">
+            <h2>Current order</h2>
+            <button
+              type="button"
+              className="pos-cart-close"
+              onClick={() => setCartOpen(false)}
+              aria-label="Close order"
+            >
+              ✕
+            </button>
+          </div>
           <div className="pos-type-row">
             {[
               ['dine_in', 'Dine-in'],
@@ -384,6 +399,7 @@ export default function PosPage() {
             disabled={!cart.items.length}
             onClick={() => {
               setSuccess(null);
+              setCartOpen(false);
               setCheckoutOpen(true);
             }}
           >
@@ -399,6 +415,14 @@ export default function PosPage() {
           </button>
         </aside>
       </div>
+
+      {itemCount > 0 && !cartOpen && (
+        <button type="button" className="pos-cart-bar" onClick={() => setCartOpen(true)}>
+          <span className="pos-cart-bar-count">{itemCount}</span>
+          <span>View order</span>
+          <strong>{formatMoney(grandTotal, currency)}</strong>
+        </button>
+      )}
 
       {modifierProduct && (
         <ModifierModal

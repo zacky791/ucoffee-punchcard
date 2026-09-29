@@ -306,6 +306,19 @@
   font-size: 1.05rem;
 }
 
+.pos-cart-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.pos-cart-close,
+.pos-cart-scrim,
+.pos-cart-bar {
+  display: none;
+}
+
 .pos-cart-items {
   overflow: auto;
   display: flex;
@@ -351,7 +364,12 @@
   margin-top: 0.45rem;
 }
 
-.pos-qty button {
+.pos-qty .pos-btn {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.pos-qty button:not(.pos-btn) {
   width: 28px;
   height: 28px;
   border-radius: 8px;
@@ -663,40 +681,408 @@
   font-size: 0.9rem;
 }
 
+/* ——— Responsive ——— */
+
+/* Give the POS more room than the rest of the app on wide screens. */
+.app-main:has(.pos-shell) {
+  max-width: 1440px;
+}
+
+/* Laptop / small desktop */
+@media (max-width: 1200px) {
+  .pos-shell {
+    grid-template-columns: 190px minmax(0, 1fr);
+  }
+
+  .pos-workspace {
+    grid-template-columns: minmax(0, 1fr) 300px;
+  }
+}
+
+/* Tablet: top nav, cart becomes a slide-up panel */
 @media (max-width: 980px) {
   .pos-shell {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
     margin: 0;
+    min-height: auto;
   }
 
   .pos-sidebar {
     border-right: 0;
     border-bottom: 1px solid var(--pos-line);
-    padding-bottom: 0.75rem;
+    padding: 0.75rem 0.75rem 0.6rem;
+    gap: 0.5rem;
+  }
+
+  .pos-sidebar-brand {
+    padding: 0 0.25rem;
   }
 
   .pos-side-nav {
     flex-direction: row;
     overflow-x: auto;
     gap: 0.35rem;
-    padding-bottom: 0.25rem;
+    padding-bottom: 0.2rem;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .pos-side-nav::-webkit-scrollbar {
+    display: none;
   }
 
   .pos-side-nav a {
+    flex: 0 0 auto;
     white-space: nowrap;
-    font-size: 0.82rem;
-    padding: 0.55rem 0.75rem;
+    font-size: 0.85rem;
+    padding: 0.55rem 0.85rem;
+    border: 1px solid var(--pos-line);
+    border-radius: 999px;
+  }
+
+  .pos-side-nav a.active {
+    border-color: transparent;
+  }
+
+  .pos-content {
+    padding: 0.9rem 0.9rem 1.2rem;
+    overflow: visible;
   }
 
   .pos-workspace,
   .pos-split,
-  .pos-grid-stats,
   .pos-form-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .pos-workspace {
+    padding-bottom: 4.5rem;
   }
 
   .pos-cart {
-    position: static;
-    max-height: none;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    top: auto;
+    z-index: 75;
+    max-height: 88vh;
+    border-radius: 20px 20px 0 0;
+    border-bottom: 0;
+    box-shadow: 0 -18px 40px rgba(15, 23, 42, 0.2);
+    padding: 1rem 1rem calc(1rem + env(safe-area-inset-bottom));
+    transform: translateY(105%);
+    transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+    overflow: auto;
+  }
+
+  .pos-cart.open {
+    transform: translateY(0);
+  }
+
+  .pos-cart-items {
+    min-height: 0;
+    overflow: visible;
+  }
+
+  .pos-cart-close {
+    display: grid;
+    place-items: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    border: 1px solid var(--pos-line);
+    background: #f8fafc;
+    font-size: 0.95rem;
+    color: var(--pos-muted);
+  }
+
+  .pos-cart-scrim {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 74;
+    background: rgba(15, 23, 42, 0.4);
+  }
+
+  .pos-cart-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    position: fixed;
+    left: 0.75rem;
+    right: 0.75rem;
+    bottom: calc(0.75rem + env(safe-area-inset-bottom));
+    z-index: 70;
+    border: 0;
+    border-radius: 16px;
+    padding: 0.85rem 1rem;
+    background: var(--pos-red);
+    color: #fff;
+    font-weight: 700;
+    font-size: 0.95rem;
+    box-shadow: 0 14px 30px rgba(229, 57, 53, 0.35);
+  }
+
+  .pos-cart-bar span:nth-child(2) {
+    flex: 1;
+    text-align: left;
+  }
+
+  .pos-cart-bar-count {
+    display: grid;
+    place-items: center;
+    min-width: 28px;
+    height: 28px;
+    padding: 0 0.4rem;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.22);
+    font-size: 0.85rem;
+  }
+}
+
+/* Phone */
+@media (max-width: 640px) {
+  .app-main:has(.pos-shell) {
+    padding-left: 0.5rem;
+    padding-right: 0.5rem;
+  }
+
+  .pos-shell {
+    border-radius: 16px;
+  }
+
+  .pos-sidebar-brand {
+    display: none;
+  }
+
+  .pos-content {
+    padding: 0.8rem 0.7rem 1rem;
+  }
+
+  .pos-page-head {
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.6rem;
+    margin-bottom: 0.8rem;
+  }
+
+  .pos-page-head h1 {
+    font-size: 1.4rem;
+  }
+
+  .pos-page-head p {
+    font-size: 0.82rem;
+  }
+
+  .pos-page-head > .pos-btn,
+  .pos-page-head > .pos-select {
+    flex: 1 1 auto;
+  }
+
+  .pos-card {
+    padding: 0.85rem;
+    border-radius: 14px;
+  }
+
+  /* Bigger tap targets; 16px text stops mobile browsers zooming on focus */
+  .pos-search,
+  .pos-input,
+  .pos-select,
+  .pos-textarea {
+    font-size: 16px;
+    min-height: 44px;
+  }
+
+  .pos-btn {
+    min-height: 44px;
+  }
+
+  .pos-grid-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.6rem;
+  }
+
+  .pos-grid-stats > :first-child {
+    grid-column: 1 / -1;
+  }
+
+  .pos-stat strong {
+    font-size: 1.25rem;
+  }
+
+  .pos-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .pos-tabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    margin: 0 -0.7rem;
+    padding: 0 0.7rem 0.15rem;
+  }
+
+  .pos-tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .pos-tab {
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+
+  .pos-search {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .pos-products {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.55rem;
+  }
+
+  .pos-product-body {
+    padding: 0.55rem 0.6rem 0.65rem;
+  }
+
+  .pos-product-body strong {
+    font-size: 0.86rem;
+  }
+
+  .pos-qty button:not(.pos-btn) {
+    width: 36px;
+    height: 36px;
+  }
+
+  .pos-qty .pos-btn {
+    min-height: 36px;
+  }
+
+  .pos-type-row button {
+    padding: 0.65rem 0.35rem;
+  }
+
+  .pos-filters {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.5rem;
+  }
+
+  .pos-filters > :first-child,
+  .pos-filters > .pos-btn {
+    grid-column: 1 / -1;
+  }
+
+  .pos-list li {
+    flex-wrap: wrap;
+    font-size: 0.86rem;
+  }
+
+  .pos-trend {
+    gap: 0.3rem;
+  }
+
+  /* Pop-ups become bottom sheets */
+  .pos-modal-backdrop {
+    place-items: end stretch;
+    padding: 0;
+  }
+
+  .pos-modal,
+  .pos-modal.wide {
+    width: 100%;
+    max-height: 92vh;
+    border-radius: 20px 20px 0 0;
+    padding: 1rem 1rem 0;
+  }
+
+  .pos-modal-actions {
+    position: sticky;
+    bottom: 0;
+    margin: 1rem -1rem 0;
+    padding: 0.75rem 1rem calc(0.75rem + env(safe-area-inset-bottom));
+    background: #fff;
+    border-top: 1px solid var(--pos-line);
+    flex-wrap: wrap;
+  }
+
+  .pos-modal-actions .pos-btn {
+    flex: 1 1 40%;
+  }
+
+  /* List tables become stacked cards */
+  .pos-table.stack thead {
+    display: none;
+  }
+
+  .pos-table.stack,
+  .pos-table.stack tbody,
+  .pos-table.stack tr,
+  .pos-table.stack td {
+    display: block;
+    width: 100%;
+  }
+
+  .pos-table.stack tr {
+    border: 1px solid var(--pos-line);
+    border-radius: 12px;
+    padding: 0.55rem 0.75rem;
+    margin-bottom: 0.55rem;
+  }
+
+  .pos-table.stack td {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.75rem;
+    border: 0;
+    padding: 0.28rem 0;
+    text-align: right;
+  }
+
+  .pos-table.stack td[data-label]::before {
+    content: attr(data-label);
+    color: var(--pos-muted);
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-align: left;
+  }
+
+  .pos-table.stack td.pos-cell-title {
+    display: block;
+    text-align: left;
+    padding-bottom: 0.4rem;
+    margin-bottom: 0.2rem;
+    border-bottom: 1px solid var(--pos-line);
+  }
+
+  .pos-table.stack td.pos-cell-action {
+    padding-top: 0.5rem;
+  }
+
+  .pos-table.stack td.pos-cell-action .pos-btn {
+    width: 100%;
+  }
+
+  .pos-table.stack td[colspan] {
+    display: block;
+    text-align: center;
+  }
+}
+
+/* Small phones */
+@media (max-width: 380px) {
+  .pos-products {
+    gap: 0.45rem;
+  }
+
+  .pos-product-price {
+    font-size: 0.88rem;
+  }
+
+  .pos-grid-stats {
+    grid-template-columns: 1fr;
   }
 }

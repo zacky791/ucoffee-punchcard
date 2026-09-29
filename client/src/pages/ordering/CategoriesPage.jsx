@@ -62,7 +62,7 @@ export default function CategoriesPage() {
       </form>
 
       <div className="pos-card">
-        <table className="pos-table">
+        <table className="pos-table stack">
           <thead>
             <tr>
               <th>Name</th>
@@ -74,14 +74,16 @@ export default function CategoriesPage() {
           <tbody>
             {categories.map((c) => (
               <tr key={c.id}>
-                <td>{c.name}</td>
-                <td>{c.sort_order}</td>
-                <td>
+                <td className="pos-cell-title">
+                  <strong>{c.name}</strong>
+                </td>
+                <td data-label="Order">{c.sort_order}</td>
+                <td data-label="Status">
                   <span className={`pos-badge ${c.active ? 'ok' : 'off'}`}>
                     {c.active ? 'Active' : 'Inactive'}
                   </span>
                 </td>
-                <td>
+                <td className="pos-cell-action">
                   <button type="button" className="pos-btn ghost" onClick={() => toggle(c)}>
                     {c.active ? 'Deactivate' : 'Activate'}
                   </button>

@@ -106,7 +106,7 @@ export default function InventoryPage() {
       </form>
 
       <div className="pos-card" style={{ overflowX: 'auto' }}>
-        <table className="pos-table">
+        <table className="pos-table stack">
           <thead>
             <tr>
               <th>Item</th>
@@ -121,11 +121,13 @@ export default function InventoryPage() {
               const low = Number(i.quantity) <= Number(i.min_threshold);
               return (
                 <tr key={i.id}>
-                  <td>{i.name}</td>
-                  <td>{i.quantity}</td>
-                  <td>{i.unit}</td>
-                  <td>{i.min_threshold}</td>
-                  <td>
+                  <td className="pos-cell-title">
+                    <strong>{i.name}</strong>
+                  </td>
+                  <td data-label="Qty">{i.quantity}</td>
+                  <td data-label="Unit">{i.unit}</td>
+                  <td data-label="Min">{i.min_threshold}</td>
+                  <td data-label="Alert">
                     {low ? (
                       <span className="pos-badge off">Low stock</span>
                     ) : (

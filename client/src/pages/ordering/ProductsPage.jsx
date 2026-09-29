@@ -188,7 +188,7 @@ export default function ProductsPage() {
           {loading ? (
             <div>Loading…</div>
           ) : (
-            <table className="pos-table">
+            <table className="pos-table stack">
               <thead>
                 <tr>
                   <th>Product</th>
@@ -201,18 +201,18 @@ export default function ProductsPage() {
               <tbody>
                 {products.map((p) => (
                   <tr key={p.id}>
-                    <td>
+                    <td className="pos-cell-title">
                       <strong>{p.name}</strong>
                       <div className="pos-product-meta">{p.sku}</div>
                     </td>
-                    <td>{p.category?.name || '—'}</td>
-                    <td>{formatMoney(p.base_price, currency)}</td>
-                    <td>
+                    <td data-label="Category">{p.category?.name || '—'}</td>
+                    <td data-label="Price">{formatMoney(p.base_price, currency)}</td>
+                    <td data-label="Status">
                       <span className={`pos-badge ${p.active ? 'ok' : 'off'}`}>
                         {p.active ? 'Active' : 'Inactive'}
                       </span>
                     </td>
-                    <td>
+                    <td className="pos-cell-action">
                       <button
                         type="button"
                         className="pos-btn ghost"

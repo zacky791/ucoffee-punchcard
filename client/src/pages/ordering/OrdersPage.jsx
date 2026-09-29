@@ -120,7 +120,7 @@ export default function OrdersPage() {
         {loading ? (
           <div>Loading…</div>
         ) : (
-          <table className="pos-table">
+          <table className="pos-table stack">
             <thead>
               <tr>
                 <th>Order</th>
@@ -140,18 +140,18 @@ export default function OrdersPage() {
               )}
               {orders.map((o) => (
                 <tr key={o.id}>
-                  <td>
+                  <td className="pos-cell-title">
                     <strong>{o.order_number}</strong>
                     <div className="pos-product-meta">{o.cashier_name}</div>
                   </td>
-                  <td>{new Date(o.created_at).toLocaleString()}</td>
-                  <td>{o.order_type}</td>
-                  <td>
+                  <td data-label="Time">{new Date(o.created_at).toLocaleString()}</td>
+                  <td data-label="Type">{o.order_type}</td>
+                  <td data-label="Status">
                     <span className={`pos-status ${o.status}`}>{o.status}</span>
                   </td>
-                  <td>{o.payment?.method || '—'}</td>
-                  <td>{formatMoney(o.grand_total, currency)}</td>
-                  <td>
+                  <td data-label="Payment">{o.payment?.method || '—'}</td>
+                  <td data-label="Total">{formatMoney(o.grand_total, currency)}</td>
+                  <td className="pos-cell-action">
                     <button
                       type="button"
                       className="pos-btn ghost"
