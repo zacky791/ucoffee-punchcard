@@ -386,6 +386,79 @@ app.get('/api/punches', requireDb, async (req, res) => {
   }
 });
 
+app.post('/api/punches/manual-out', requireDb, async (req, res) => {
+  try {
+    const { in_punch_id, punched_at, note } = req.body || {};
+    if (!in_punch_id) {
+      return res.status(400).json({ error: 'in_punch_id is required' });
+    }
+    const outAt = new Date(punched_at);
+    if (!punched_at || Number.isNaN(outAt.getTime())) {
+      return res.status(400).json({ error: 'A valid clock-out time is required' });
+    }
+
+    const { data: inPunch, error: inError } = await getSupabase()
+      .from('punches')
+      .select('id, staff_id, type, punched_at, staff:staff_id(id, name)')
+      .eq('id', in_punch_id)
+      .maybeSingle();
+    if (inError) throw inError;
+    if (!inPunch || inPunch.type !== 'in') {
+      return res.status(404).json({ error: 'Clock-in not found' });
+    }
+
+    const inAt = new Date(inPunch.punched_at);
+    if (outAt <= inAt) {
+      return res.status(400).json({ error: 'Clock-out must be after the clock-in time' });
+    }
+    if (outAt - inAt > MAX_SHIFT_MS) {
+      return res.status(400).json({ error: 'Shift cannot be longer than 16 hours' });
+    }
+    if (outAt > new Date()) {
+      return res.status(400).json({ error: 'Clock-out cannot be in the future' });
+    }
+
+    const { data: nextPunch, error: nextError } = await getSupabase()
+      .from('punches')
+      .select('type, punched_at')
+      .eq('staff_id', inPunch.staff_id)
+      .gt('punched_at', inPunch.punched_at)
+      .order('punched_at', { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    if (nextError) throw nextError;
+    if (nextPunch?.type === 'out') {
+      return res.status(409).json({ error: 'This shift already has a clock-out' });
+    }
+    if (nextPunch && outAt >= new Date(nextPunch.punched_at)) {
+      return res.status(400).json({
+        error: 'Clock-out must be before the next clock-in',
+      });
+    }
+
+    const { data: punch, error: punchError } = await getSupabase()
+      .from('punches')
+      .insert({
+        staff_id: inPunch.staff_id,
+        type: 'out',
+        punched_at: outAt.toISOString(),
+        note: note ? String(note).slice(0, 200) : 'Manual clock-out',
+        location_label: 'Manual entry',
+      })
+      .select(PUNCH_SELECT)
+      .single();
+    if (punchError) throw punchError;
+
+    res.status(201).json({
+      punch,
+      message: `${inPunch.staff?.name || 'Staff'} clocked out manually`,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message || 'Failed to save clock-out' });
+  }
+});
+
 app.get('/api/punches/today', requireDb, async (_req, res) => {
   try {
     const start = new Date();

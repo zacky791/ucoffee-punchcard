@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { CAFE_ZONE, checkZone } from './lib/geofence';
-import { isActivelyClockedIn } from './lib/performance';
+import { MAX_SHIFT_HOURS, isActivelyClockedIn } from './lib/performance';
 
 const supabaseUrl =
   import.meta.env.VITE_SUPABASE_URL ||
@@ -205,6 +205,63 @@ async function punchDirect(body) {
       nextType === 'in'
         ? `${person.name} clocked in`
         : `${person.name} clocked out`,
+  };
+}
+
+async function manualClockOutDirect(body) {
+  requireSupabase();
+  const { in_punch_id, punched_at, note } = body || {};
+  if (!in_punch_id) throw new Error('in_punch_id is required');
+  const outAt = new Date(punched_at);
+  if (!punched_at || Number.isNaN(outAt.getTime())) {
+    throw new Error('A valid clock-out time is required');
+  }
+
+  const { data: inPunch, error: inError } = await supabase
+    .from('punches')
+    .select('id, staff_id, type, punched_at, staff:staff_id(id, name)')
+    .eq('id', in_punch_id)
+    .maybeSingle();
+  if (inError) throw new Error(inError.message);
+  if (!inPunch || inPunch.type !== 'in') throw new Error('Clock-in not found');
+
+  const inAt = new Date(inPunch.punched_at);
+  if (outAt <= inAt) throw new Error('Clock-out must be after the clock-in time');
+  if (outAt - inAt > MAX_SHIFT_HOURS * 60 * 60 * 1000) {
+    throw new Error(`Shift cannot be longer than ${MAX_SHIFT_HOURS} hours`);
+  }
+  if (outAt > new Date()) throw new Error('Clock-out cannot be in the future');
+
+  const { data: nextPunch, error: nextError } = await supabase
+    .from('punches')
+    .select('type, punched_at')
+    .eq('staff_id', inPunch.staff_id)
+    .gt('punched_at', inPunch.punched_at)
+    .order('punched_at', { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (nextError) throw new Error(nextError.message);
+  if (nextPunch?.type === 'out') throw new Error('This shift already has a clock-out');
+  if (nextPunch && outAt >= new Date(nextPunch.punched_at)) {
+    throw new Error('Clock-out must be before the next clock-in');
+  }
+
+  const { data: punch, error: punchError } = await supabase
+    .from('punches')
+    .insert({
+      staff_id: inPunch.staff_id,
+      type: 'out',
+      punched_at: outAt.toISOString(),
+      note: note ? String(note).slice(0, 200) : 'Manual clock-out',
+      location_label: 'Manual entry',
+    })
+    .select(PUNCH_SELECT)
+    .single();
+  if (punchError) throw new Error(punchError.message);
+
+  return {
+    punch,
+    message: `${inPunch.staff?.name || 'Staff'} clocked out manually`,
   };
 }
 
@@ -420,6 +477,13 @@ export const api = {
     useDirectSupabase
       ? punchDirect(body)
       : request('/api/punch', { method: 'POST', body: JSON.stringify(body) }),
+  manualClockOut: (body) =>
+    useDirectSupabase
+      ? manualClockOutDirect(body)
+      : request('/api/punches/manual-out', {
+          method: 'POST',
+          body: JSON.stringify(body),
+        }),
   getPunches: async (params = {}) => {
     if (useDirectSupabase) return asArray(await getPunchesDirect(params));
     const qs = new URLSearchParams(params).toString();

@@ -1613,6 +1613,41 @@ select:focus {
   font-weight: 600;
 }
 
+.week-mini-edit {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  margin-left: 0.3rem;
+  padding: 0;
+  vertical-align: middle;
+  border: 1px solid rgba(138, 82, 68, 0.35);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--out);
+  cursor: pointer;
+}
+
+.week-mini-edit:hover {
+  background: rgba(138, 82, 68, 0.12);
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgba(20, 14, 10, 0.45);
+}
+
+.modal-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.6rem;
+}
+
 .week-mini-missed {
   border-color: rgba(138, 82, 68, 0.25) !important;
   background: rgba(138, 82, 68, 0.08) !important;

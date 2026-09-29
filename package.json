@@ -8,7 +8,8 @@
     "dev:server": "npm run dev --prefix server",
     "dev:client": "npm run dev --prefix client",
     "install:all": "npm install && npm install --prefix server && npm install --prefix client",
-    "start": "npm run start --prefix server",
+    "start": "concurrently -n server,client -c green,cyan \"npm run start --prefix server\" \"npm run dev --prefix client\"",
+    "start:server": "npm run start --prefix server",
     "build": "npm run build --prefix client",
     "build:netlify": "npm install --prefix server && npm install --prefix client && npm run build --prefix client"
   },
