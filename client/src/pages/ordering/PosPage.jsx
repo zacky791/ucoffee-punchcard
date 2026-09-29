@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api } from '../../api';
 import { formatMoney, useCart } from '../../context/CartContext';
+import PrinterConnectButton from '../../components/PrinterConnectButton';
+import { printFromResult } from '../../lib/receiptPrinter';
 
 function nowLabel() {
   return new Date().toLocaleString(undefined, {
@@ -134,6 +136,9 @@ export default function PosPage() {
             </strong>
           </p>
         </div>
+        {settings?.hardware_provider === 'phone' && (
+          <PrinterConnectButton onError={setError} />
+        )}
       </div>
 
       {error && <div className="pos-alert error">{error}</div>}
@@ -148,12 +153,13 @@ export default function PosPage() {
               onClick={async () => {
                 try {
                   const res = await api.posReprint(success.orderId);
+                  const printed = await printFromResult(res.result);
                   setSuccess({
                     ...success,
-                    printOk: res.ok,
-                    message: res.ok
+                    printOk: printed.ok,
+                    message: printed.ok
                       ? 'Receipt reprinted successfully.'
-                      : res.result?.message || 'Reprint failed',
+                      : printed.message || 'Reprint failed',
                   });
                 } catch (err) {
                   setError(err.message);
@@ -413,18 +419,23 @@ export default function PosPage() {
           methods={settings?.payment_methods || ['cash', 'card', 'ewallet', 'other']}
           cart={cart}
           onClose={() => setCheckoutOpen(false)}
-          onPaid={(result) => {
+          onPaid={async (result) => {
             setCheckoutOpen(false);
             cart.clear();
-            const printOk = Boolean(result.hardware?.printResult?.ok);
+            const printResult = result.hardware?.printResult;
+            const printed = await printFromResult(printResult);
+            const orderNumber = result.order?.order_number;
             setSuccess({
               orderId: result.order?.id,
-              printOk,
-              message:
-                result.message ||
-                (printOk
-                  ? `Paid · ${result.order?.order_number}`
-                  : `Paid · ${result.order?.order_number} — print failed`),
+              printOk: printed.ok,
+              message: printResult?.client_print
+                ? printed.ok
+                  ? `Paid · ${orderNumber}. Receipt printed.`
+                  : `Paid · ${orderNumber}. Print failed: ${printed.message}`
+                : result.message ||
+                  (printed.ok
+                    ? `Paid · ${orderNumber}`
+                    : `Paid · ${orderNumber} — print failed`),
             });
           }}
         />

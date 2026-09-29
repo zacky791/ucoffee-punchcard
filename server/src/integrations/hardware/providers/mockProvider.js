@@ -11,7 +11,7 @@ function formatReceiptText(order, settings = {}) {
   rows.push(line());
   rows.push(`Receipt: ${order.receipt_number || '-'}`);
   rows.push(`Order:   ${order.order_number}`);
-  rows.push(`Date:    ${order.paid_at || order.created_at || new Date().toISOString()}`);
+  rows.push(`Date:    ${formatDate(order.paid_at || order.created_at || new Date())}`);
   rows.push(`Cashier: ${order.cashier_name || '-'}`);
   rows.push(`Type:    ${order.order_type || '-'}`);
   if (order.table_label) rows.push(`Table:   ${order.table_label}`);
@@ -50,6 +50,20 @@ function formatReceiptText(order, settings = {}) {
   }
   rows.push('');
   return rows.join('\n');
+}
+
+function formatDate(value) {
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return String(value);
+  return new Intl.DateTimeFormat('en-GB', {
+    timeZone: process.env.CAFE_TZ || 'Asia/Kuala_Lumpur',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(d);
 }
 
 function center(text, width) {
@@ -96,7 +110,7 @@ async function checkPrinterStatus(_settings = {}) {
     ok: true,
     provider: 'mock',
     online: true,
-    message: 'Mock printer online',
+    message: 'Mock mode: simulated printer, no real device connected',
   };
 }
 

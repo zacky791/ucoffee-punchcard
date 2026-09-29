@@ -1,11 +1,23 @@
 import { useEffect, useState } from 'react';
 import { api } from '../../api';
+import PrinterConnectButton from '../../components/PrinterConnectButton';
+import {
+  checkPrinterConnection,
+  disconnectPrinter,
+  getPrinterState,
+  printFromResult,
+  setPrintMode,
+  subscribePrinter,
+} from '../../lib/receiptPrinter';
 
 export default function SettingsPage() {
   const [form, setForm] = useState(null);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [hwStatus, setHwStatus] = useState(null);
+  const [printer, setPrinter] = useState(getPrinterState);
+
+  useEffect(() => subscribePrinter(setPrinter), []);
 
   useEffect(() => {
     (async () => {
@@ -49,10 +61,55 @@ export default function SettingsPage() {
   async function testConnection() {
     setError('');
     setMessage('');
+    setHwStatus(null);
     try {
+      if (form.hardware_provider === 'phone') {
+        const state = await checkPrinterConnection();
+        if (state.mode === 'rawbt') {
+          setHwStatus({
+            ok: true,
+            title: 'Using RawBT app',
+            detail:
+              'This phone sends receipts to the RawBT app. The browser cannot see the Bluetooth link; tap Test print to confirm the printer responds.',
+          });
+        } else if (!state.supported) {
+          setHwStatus({
+            ok: false,
+            title: 'Bluetooth not available',
+            detail: 'This browser has no Bluetooth access. Use Chrome on Android over https, or switch to RawBT.',
+          });
+        } else if (state.connected) {
+          setHwStatus({
+            ok: true,
+            title: 'Bluetooth printer connected',
+            detail: `Device: ${state.name || 'Unnamed printer'}. Receipts will print after payment.`,
+          });
+        } else {
+          setHwStatus({
+            ok: false,
+            title: 'Bluetooth printer not connected',
+            detail: state.name
+              ? `Lost connection to ${state.name}. Check the printer is on and nearby, then tap Connect printer.`
+              : 'No printer paired in this session. Tap Connect printer and pick your printer.',
+          });
+        }
+        return;
+      }
+      if (form.hardware_provider === 'mock') {
+        setHwStatus({
+          tone: 'warn',
+          title: 'Mock mode: no real printer',
+          detail:
+            'Mock is a pretend printer for testing. It does not use Bluetooth or any device. To use your POS-58B, set Hardware provider to "Cashier phone (Bluetooth printer)", tap Save settings, then Connect printer.',
+        });
+        return;
+      }
       const res = await api.posHardwareStatus();
-      setHwStatus(res.status);
-      setMessage(res.status?.message || 'Status checked');
+      setHwStatus({
+        ok: Boolean(res.status?.ok),
+        title: res.status?.ok ? 'Connection OK' : 'Connection failed',
+        detail: `Provider: ${res.status?.provider || form.hardware_provider}. ${res.status?.message || ''}`,
+      });
     } catch (err) {
       setError(err.message);
     }
@@ -61,10 +118,41 @@ export default function SettingsPage() {
   async function testPrint() {
     setError('');
     setMessage('');
+    setHwStatus(null);
     try {
       const res = await api.posTestPrint();
-      setMessage(res.message || (res.ok ? 'Test print OK' : 'Test print failed'));
-      if (!res.ok) setError(res.message);
+      if (form.hardware_provider === 'phone' && !res.client_print) {
+        setHwStatus({
+          ok: false,
+          title: 'Test print not sent',
+          detail: `The saved provider is still "${res.provider}". Tap Save settings first, then Test print again.`,
+        });
+        return;
+      }
+      if (res.provider === 'mock') {
+        setHwStatus({
+          tone: 'warn',
+          title: 'Nothing printed (Mock mode)',
+          detail:
+            'The test receipt was only written to the server log. Switch Hardware provider to "Cashier phone (Bluetooth printer)" and save to print on paper.',
+        });
+        return;
+      }
+      const printed = await printFromResult(res);
+      const state = getPrinterState();
+      setHwStatus({
+        ok: printed.ok,
+        title: printed.ok ? 'Test print sent' : 'Test print failed',
+        detail: res.client_print
+          ? printed.ok
+            ? `${printed.message}. If nothing came out, check paper and that the printer is on.`
+            : `${printed.message}${
+                state.mode === 'bluetooth' && !state.connected
+                  ? ' (Bluetooth printer not connected.)'
+                  : ''
+              }`
+          : `Provider: ${res.provider}. ${printed.message}`,
+      });
     } catch (err) {
       setError(err.message);
     }
@@ -215,6 +303,7 @@ export default function SettingsPage() {
             value={form.hardware_provider || 'mock'}
             onChange={(e) => set('hardware_provider', e.target.value)}
           >
+            <option value="phone">Cashier phone (Bluetooth printer)</option>
             <option value="mock">Mock (dev logs)</option>
             <option value="escpos">ESC/POS (needs device config)</option>
             <option value="local_bridge">Local hardware bridge</option>
@@ -274,22 +363,67 @@ export default function SettingsPage() {
             Open drawer
           </button>
         </div>
+
+        {hwStatus && (
+          <div
+            className={`pos-alert ${hwStatus.tone || (hwStatus.ok ? 'ok' : 'error')} full`}
+            role="status"
+            style={{ gridColumn: '1 / -1', margin: 0 }}
+          >
+            <strong>
+              {hwStatus.tone === 'warn' ? '!' : hwStatus.ok ? '✓' : '✕'} {hwStatus.title}
+            </strong>
+            <div>{hwStatus.detail}</div>
+          </div>
+        )}
       </form>
 
-      {hwStatus && (
+      {form.hardware_provider === 'phone' && (
         <div className="pos-card" style={{ marginTop: '0.85rem' }}>
-          <strong>Hardware status</strong>
-          <pre style={{ whiteSpace: 'pre-wrap', fontSize: '0.85rem' }}>
-            {JSON.stringify(hwStatus, null, 2)}
-          </pre>
+          <h2 style={{ marginTop: 0, fontSize: '1.05rem' }}>Cashier phone printer</h2>
+          <p className="pos-meta" style={{ marginTop: 0 }}>
+            These options are saved on this phone only. Save settings above first, then
+            connect and tap <strong>Test print</strong>.
+          </p>
+          <div className="pos-form-grid">
+            <label className="pos-field">
+              <span>Print method on this phone</span>
+              <select
+                className="pos-select"
+                value={printer.mode}
+                onChange={(e) => setPrintMode(e.target.value)}
+              >
+                <option value="bluetooth">Bluetooth direct (Chrome)</option>
+                <option value="rawbt">RawBT app (Android)</option>
+              </select>
+            </label>
+            <div className="pos-field" style={{ justifyContent: 'flex-end' }}>
+              <span>Status</span>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <PrinterConnectButton onError={setError} />
+                {printer.mode === 'bluetooth' && printer.connected && (
+                  <button type="button" className="pos-btn ghost" onClick={disconnectPrinter}>
+                    Disconnect
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+          {printer.mode === 'bluetooth' && !printer.supported && (
+            <div className="pos-alert warn" style={{ marginTop: '0.75rem' }}>
+              This browser has no Bluetooth access. Open the app in Chrome on Android
+              (over https), or switch to RawBT.
+            </div>
+          )}
         </div>
       )}
 
       <div className="pos-card" style={{ marginTop: '0.85rem' }}>
         <h2 style={{ marginTop: 0, fontSize: '1.05rem' }}>How hardware works</h2>
         <p className="pos-meta" style={{ marginTop: 0 }}>
-          After payment, the API calls <code>HardwareIntegrationService</code>. The
-          browser never talks to the printer directly. Use <strong>mock</strong> locally
+          After payment, the API calls <code>HardwareIntegrationService</code>. With{' '}
+          <strong>Cashier phone</strong>, the server sends the receipt back and the phone
+          prints it over Bluetooth. Otherwise, use <strong>mock</strong> locally
           (receipt text appears in the Node server console). For a remote API + USB
           printer on the cashier PC, run a local bridge and set provider to{' '}
           <strong>local_bridge</strong>. ESC/POS and cashier API need your real device /

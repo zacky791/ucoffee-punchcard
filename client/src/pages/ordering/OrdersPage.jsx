@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../../api';
 import { formatMoney } from '../../context/CartContext';
+import { printFromResult } from '../../lib/receiptPrinter';
 
 export default function OrdersPage() {
   const [orders, setOrders] = useState([]);
@@ -189,7 +190,9 @@ function OrderDetailModal({ order, currency, onClose, onUpdated, onError }) {
   async function reprint() {
     setBusy(true);
     try {
-      await api.posReprint(order.id);
+      const res = await api.posReprint(order.id);
+      const printed = await printFromResult(res.result);
+      if (!printed.ok) onError(printed.message);
       await onUpdated();
     } catch (err) {
       onError(err.message);

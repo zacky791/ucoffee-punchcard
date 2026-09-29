@@ -9,9 +9,11 @@
  *  - escpos: ESC/POS USB/TCP/serial when hardware details are configured
  *  - local_bridge: forwards jobs to a café-PC print bridge
  *  - cashier_api: adapter stub for an existing cashier software API (needs real docs)
+ *  - phone: returns receipt text; the cashier phone prints it over Bluetooth
  */
 
 const mockProvider = require('./providers/mockProvider');
+const phoneProvider = require('./providers/phoneProvider');
 const escposProvider = require('./providers/escposProvider');
 const localBridgeProvider = require('./providers/localBridgeProvider');
 const cashierApiProvider = require('./providers/cashierApiProvider');
@@ -21,6 +23,7 @@ const PROVIDERS = {
   escpos: escposProvider,
   local_bridge: localBridgeProvider,
   cashier_api: cashierApiProvider,
+  phone: phoneProvider,
 };
 
 function getProvider(name) {
