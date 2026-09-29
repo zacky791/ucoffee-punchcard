@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api } from '../../api';
 import { formatMoney } from '../../context/CartContext';
 
@@ -20,6 +20,7 @@ export default function ProductsPage() {
   const [editingId, setEditingId] = useState(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
+  const nameRef = useRef(null);
 
   async function load() {
     setLoading(true);
@@ -76,6 +77,8 @@ export default function ProductsPage() {
       image_url: p.image_url || '',
       active: p.active !== false,
     });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    nameRef.current?.focus({ preventScroll: true });
   }
 
   return (
@@ -98,6 +101,7 @@ export default function ProductsPage() {
             <label className="pos-field">
               <span>Name</span>
               <input
+                ref={nameRef}
                 className="pos-input"
                 required
                 value={form.name}

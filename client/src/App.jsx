@@ -11,7 +11,6 @@ import PosPage from './pages/ordering/PosPage';
 import OrdersPage from './pages/ordering/OrdersPage';
 import ProductsPage from './pages/ordering/ProductsPage';
 import CategoriesPage from './pages/ordering/CategoriesPage';
-import CustomersPage from './pages/ordering/CustomersPage';
 import InventoryPage from './pages/ordering/InventoryPage';
 import ReportsPage from './pages/ordering/ReportsPage';
 import ProfitPage from './pages/ordering/ProfitPage';
@@ -60,7 +59,6 @@ export default function App() {
             <Route path="orders" element={<OrdersPage />} />
             <Route path="products" element={<ProductsPage />} />
             <Route path="categories" element={<CategoriesPage />} />
-            <Route path="customers" element={<CustomersPage />} />
             <Route path="inventory" element={<InventoryPage />} />
             <Route path="recipe" element={<RecipePage />} />
             <Route path="profit" element={<ProfitPage />} />

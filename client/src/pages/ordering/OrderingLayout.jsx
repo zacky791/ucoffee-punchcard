@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { NavLink, Outlet } from 'react-router-dom';
+import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { CartProvider } from '../../context/CartContext';
 import { restorePrinter } from '../../lib/receiptPrinter';
 import '../../styles/ordering.css';
@@ -10,7 +10,6 @@ const NAV = [
   { to: '/ordering/orders', label: 'Orders' },
   { to: '/ordering/products', label: 'Products' },
   { to: '/ordering/categories', label: 'Categories' },
-  { to: '/ordering/customers', label: 'Customers' },
   { to: '/ordering/inventory', label: 'Inventory' },
   { to: '/ordering/recipe', label: 'Recipe' },
   { to: '/ordering/profit', label: 'Profit' },
@@ -20,9 +19,21 @@ const NAV = [
 ];
 
 export default function OrderingLayout() {
+  const { pathname } = useLocation();
+
   useEffect(() => {
     restorePrinter();
   }, []);
+
+  useEffect(() => {
+    const nav = document.querySelector('.pos-side-nav');
+    const link = nav?.querySelector('a.active');
+    if (!nav || !link || nav.scrollWidth <= nav.clientWidth) return;
+    nav.scrollTo({
+      left: link.offsetLeft - (nav.clientWidth - link.offsetWidth) / 2,
+      behavior: 'smooth',
+    });
+  }, [pathname]);
 
   return (
     <CartProvider>

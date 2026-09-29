@@ -34,6 +34,34 @@ function formatAxis(n) {
   return Number.isInteger(n) ? String(n) : n.toFixed(1);
 }
 
+function fmtQty(n) {
+  return Number(n || 0).toLocaleString('en-MY', { maximumFractionDigits: 2 });
+}
+
+/** Items at or below their alert level, with a buy amount that tops stock up to twice the alert level. */
+function restockList(inventory) {
+  return inventory
+    .filter((i) => Number(i.min_threshold) > 0 && Number(i.quantity) <= Number(i.min_threshold))
+    .map((i) => {
+      const quantity = Math.max(0, Number(i.quantity) || 0);
+      const target = Number(i.min_threshold) * 2;
+      const need = Math.max(0, target - quantity);
+      const packSize = Number(i.pack_price) > 0 ? Number(i.pack_size) || 0 : 0;
+      const packs = packSize > 0 ? Math.max(1, Math.ceil(need / packSize)) : 0;
+      return {
+        ...i,
+        quantity,
+        target,
+        need,
+        packs,
+        pack_size: packSize,
+        cost: packs ? packs * (Number(i.pack_price) || 0) : 0,
+        out: quantity <= 0,
+      };
+    })
+    .sort((a, b) => a.quantity / a.min_threshold - b.quantity / b.min_threshold);
+}
+
 export default function DashboardPage() {
   const today = businessDateKey(new Date().toISOString());
   const [orders, setOrders] = useState([]);
@@ -42,14 +70,17 @@ export default function DashboardPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState(null);
+  const [lowStock, setLowStock] = useState([]);
 
   const loadToday = useCallback(async () => {
     const range = businessDayRange(today);
-    const [list, profit, settings] = await Promise.all([
+    const [list, profit, settings, inventory] = await Promise.all([
       api.posGetOrders({ from: range.from, to: range.to, limit: 200 }),
       api.posProfitReport({ from: range.from, to: range.to }),
       api.posGetSettings(),
+      api.posGetInventory().catch(() => []),
     ]);
+    setLowStock(restockList(inventory || []));
     setOrders(list || []);
     setProducts(
       [...(profit?.products || [])].sort((a, b) => b.quantity - a.quantity || b.sales - a.sales)
@@ -83,9 +114,6 @@ export default function DashboardPage() {
           <h1>Dashboard</h1>
           <p>Today’s café sales at a glance</p>
         </div>
-        <Link className="pos-btn primary" to="/ordering/pos">
-          New order
-        </Link>
       </div>
 
       {error && <div className="pos-alert error">{error}</div>}
@@ -93,6 +121,40 @@ export default function DashboardPage() {
 
       {!loading && (
         <>
+          {lowStock.length > 0 && (
+            <div className="pos-restock">
+              <div className="pos-restock-head">
+                <strong>
+                  ⚠ {lowStock.length} item(s) running low. Restock soon
+                </strong>
+                <Link to="/ordering/inventory">Open Inventory</Link>
+              </div>
+              <ul>
+                {lowStock.map((i) => (
+                  <li key={i.id}>
+                    <span className="pos-restock-name">
+                      <strong>{i.name}</strong>
+                      <small>
+                        {i.out ? 'Out of stock' : `${fmtQty(i.quantity)} ${i.unit} left`} · alert at{' '}
+                        {fmtQty(i.min_threshold)} {i.unit}
+                      </small>
+                    </span>
+                    <span className="pos-restock-buy">
+                      <strong>
+                        Buy {i.packs ? `${i.packs} pack(s)` : `${fmtQty(i.need)} ${i.unit}`}
+                      </strong>
+                      <small>
+                        {i.packs
+                          ? `${fmtQty(i.packs * i.pack_size)} ${i.unit}${i.cost ? ` · ~${formatMoney(i.cost, currency)}` : ''}`
+                          : `to reach ${fmtQty(i.target)} ${i.unit}`}
+                      </small>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           <div className="pos-grid-stats">
             <div className="pos-card pos-stat">
               <span>Today’s sales</span>
