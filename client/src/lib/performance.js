@@ -1,76 +1,15 @@
-/** Pair clock-in/out punches into worked sessions and totals. */
-
-export function buildPerformance(punches = [], staffList = []) {
-  const byStaff = new Map();
-
-  for (const person of staffList) {
-    byStaff.set(person.id, {
-      staff_id: person.id,
-      name: person.name,
-      role: person.role,
-      punches: [],
-      sessions: [],
-      total_ms: 0,
-      days: new Set(),
-      open_session: null,
-      punch_count: 0,
-    });
-  }
-
-  const sorted = [...punches].sort(
-    (a, b) => new Date(a.punched_at) - new Date(b.punched_at)
-  );
-
-  for (const punch of sorted) {
-    const id = punch.staff_id;
-    if (!byStaff.has(id)) {
-      byStaff.set(id, {
-        staff_id: id,
-        name: punch.staff?.name || 'Unknown',
-        role: punch.staff?.role || '',
-        punches: [],
-        sessions: [],
-        total_ms: 0,
-        days: new Set(),
-        open_session: null,
-        punch_count: 0,
-      });
-    }
-    const row = byStaff.get(id);
-    row.punches.push(punch);
-    row.punch_count += 1;
-    row.days.add(new Date(punch.punched_at).toDateString());
-
-    if (punch.type === 'in') {
-      row.open_session = punch;
-    } else if (punch.type === 'out' && row.open_session) {
-      const start = new Date(row.open_session.punched_at);
-      const end = new Date(punch.punched_at);
-      const ms = Math.max(0, end - start);
-      row.sessions.push({
-        in: row.open_session,
-        out: punch,
-        ms,
-      });
-      row.total_ms += ms;
-      row.open_session = null;
-    }
-  }
-
-  return [...byStaff.values()]
-    .map((row) => ({
-      staff_id: row.staff_id,
-      name: row.name,
-      role: row.role,
-      punch_count: row.punch_count,
-      days_worked: row.days.size,
-      total_ms: row.total_ms,
-      total_hours: Math.round((row.total_ms / 3600000) * 10) / 10,
-      open_now: Boolean(row.open_session),
-    }))
-    .filter((row) => row.punch_count > 0 || staffList.some((s) => s.id === row.staff_id))
-    .sort((a, b) => b.total_ms - a.total_ms || a.name.localeCompare(b.name));
-}
+/**
+ * Shift rules (standard attendance / payroll practice):
+ *  - A shift belongs to the business date of its clock-in, even if it ends after midnight.
+ *  - The business day rolls over at BUSINESS_DAY_CUTOFF_HOUR, not midnight, so a
+ *    1 AM punch still belongs to the previous day.
+ *  - A clock-in with no clock-out within MAX_SHIFT_HOURS is a missed clock-out:
+ *    it is flagged for review and not counted as paid hours.
+ * Keep MAX_SHIFT_HOURS in sync with server/src/app.js.
+ */
+export const BUSINESS_DAY_CUTOFF_HOUR = 6;
+export const MAX_SHIFT_HOURS = 16;
+const MAX_SHIFT_MS = MAX_SHIFT_HOURS * 60 * 60 * 1000;
 
 function toLocalDateKey(iso) {
   const d = new Date(iso);
@@ -80,9 +19,170 @@ function toLocalDateKey(iso) {
   return `${y}-${m}-${day}`;
 }
 
+/** Business date (YYYY-MM-DD) of a timestamp, honoring the early-morning cutoff. */
+export function businessDateKey(iso) {
+  const d = new Date(iso);
+  d.setHours(d.getHours() - BUSINESS_DAY_CUTOFF_HOUR);
+  return toLocalDateKey(d);
+}
+
+/** Punch query window for a Mon–Sun week, including overnight clock-outs after Sunday. */
+export function weekPunchRange(weekStart) {
+  const from = parseDateKey(weekStart);
+  from.setHours(BUSINESS_DAY_CUTOFF_HOUR, 0, 0, 0);
+  const to = new Date(from);
+  to.setDate(to.getDate() + 7);
+  to.setTime(to.getTime() + MAX_SHIFT_MS);
+  return { from: from.toISOString(), to: to.toISOString() };
+}
+
+/**
+ * Pair punches into shifts. Each shift: { staff_id, in, out, ms, business_date, status }
+ * status: 'closed' | 'open' (still working) | 'missed_out' | 'orphan_out' (out with no in)
+ */
+export function pairShifts(punches = [], now = new Date()) {
+  const shifts = [];
+  const open = new Map();
+  const sorted = [...punches].sort(
+    (a, b) => new Date(a.punched_at) - new Date(b.punched_at)
+  );
+
+  const closeAsMissed = (staffId) => {
+    const shift = open.get(staffId);
+    if (shift) shift.status = 'missed_out';
+    open.delete(staffId);
+  };
+
+  for (const punch of sorted) {
+    const staffId = punch.staff_id || punch.staff?.id || 'unknown';
+
+    if (punch.type === 'in') {
+      closeAsMissed(staffId);
+      const shift = {
+        staff_id: staffId,
+        staff: punch.staff,
+        in: punch,
+        out: null,
+        ms: 0,
+        business_date: businessDateKey(punch.punched_at),
+        status: 'open',
+      };
+      shifts.push(shift);
+      open.set(staffId, shift);
+      continue;
+    }
+
+    const shift = open.get(staffId);
+    const elapsed = shift
+      ? new Date(punch.punched_at) - new Date(shift.in.punched_at)
+      : Infinity;
+    if (shift && elapsed <= MAX_SHIFT_MS) {
+      shift.out = punch;
+      shift.ms = Math.max(0, elapsed);
+      shift.status = 'closed';
+      open.delete(staffId);
+    } else {
+      closeAsMissed(staffId);
+      shifts.push({
+        staff_id: staffId,
+        staff: punch.staff,
+        in: null,
+        out: punch,
+        ms: 0,
+        business_date: businessDateKey(punch.punched_at),
+        status: 'orphan_out',
+      });
+    }
+  }
+
+  for (const shift of open.values()) {
+    if (now - new Date(shift.in.punched_at) > MAX_SHIFT_MS) {
+      shift.status = 'missed_out';
+    }
+  }
+
+  return shifts;
+}
+
+/** True if a staff member's last punch is a clock-in that is still within MAX_SHIFT_HOURS. */
+export function isActivelyClockedIn(lastPunchType, lastPunchedAt, now = new Date()) {
+  return (
+    lastPunchType === 'in' &&
+    Boolean(lastPunchedAt) &&
+    now - new Date(lastPunchedAt) <= MAX_SHIFT_MS
+  );
+}
+
+/**
+ * Pay-period totals per staff. Only shifts whose clock-in business date falls in
+ * [fromDate, toDate] count; missed clock-outs are reported, not paid.
+ */
+export function buildPerformance(punches = [], staffList = [], { fromDate, toDate } = {}) {
+  const byStaff = new Map();
+  const ensure = (id, staff) => {
+    if (!byStaff.has(id)) {
+      byStaff.set(id, {
+        staff_id: id,
+        name: staff?.name || 'Unknown',
+        role: staff?.role || '',
+        total_ms: 0,
+        days: new Set(),
+        missed_clock_outs: 0,
+        open_now: false,
+        shift_count: 0,
+      });
+    }
+    return byStaff.get(id);
+  };
+
+  for (const person of staffList) ensure(person.id, person);
+
+  for (const shift of pairShifts(punches)) {
+    if (!shift.in) continue;
+    if (fromDate && shift.business_date < fromDate) continue;
+    if (toDate && shift.business_date > toDate) continue;
+
+    const row = ensure(shift.staff_id, shift.staff);
+    row.shift_count += 1;
+    if (shift.status === 'closed') {
+      row.total_ms += shift.ms;
+      row.days.add(shift.business_date);
+    } else if (shift.status === 'open') {
+      row.open_now = true;
+      row.days.add(shift.business_date);
+    } else if (shift.status === 'missed_out') {
+      row.missed_clock_outs += 1;
+    }
+  }
+
+  return [...byStaff.values()]
+    .map((row) => ({
+      staff_id: row.staff_id,
+      name: row.name,
+      role: row.role,
+      shift_count: row.shift_count,
+      days_worked: row.days.size,
+      total_ms: row.total_ms,
+      total_hours: Math.round((row.total_ms / 3600000) * 10) / 10,
+      open_now: row.open_now,
+      missed_clock_outs: row.missed_clock_outs,
+    }))
+    .sort((a, b) => b.total_ms - a.total_ms || a.name.localeCompare(b.name));
+}
+
 /** Punches for one local calendar day. */
 export function punchesForDate(punches = [], dateKey) {
   return punches.filter((p) => toLocalDateKey(p.punched_at) === dateKey);
+}
+
+/** Map punch id → business date of the shift it belongs to. */
+export function shiftDateKeys(punches = []) {
+  const keys = new Map();
+  for (const shift of pairShifts(punches)) {
+    if (shift.in) keys.set(shift.in.id, shift.business_date);
+    if (shift.out) keys.set(shift.out.id, shift.business_date);
+  }
+  return keys;
 }
 
 /**
@@ -97,13 +197,14 @@ export function buildWeekAttendance({
   hours = [],
 } = {}) {
   const staffMap = new Map(staff.map((s) => [s.id, s]));
+  const shiftKeys = shiftDateKeys(punches);
 
   return DAY_ORDER.map((dayOfWeek) => {
     const dateKey = dateForWeekDay(weekStart, dayOfWeek);
     const dayHours =
       hours.find((h) => Number(h.day_of_week) === dayOfWeek) || null;
     const isClosed = Boolean(dayHours?.is_closed);
-    const dayPunches = punchesForDate(punches, dateKey);
+    const dayPunches = punches.filter((p) => shiftKeys.get(p.id) === dateKey);
     const worked = buildDayStaffSummaries(dayPunches);
     const workedIds = new Set(worked.map((w) => w.staff_id));
 
@@ -216,10 +317,20 @@ export function buildDayStaffSummaries(punches = []) {
   return [...byStaff.values()]
     .map((row) => ({
       ...row,
-      still_in: Boolean(row.openIn),
+      still_in: Boolean(row.openIn) && isActivelyClockedIn('in', row.openIn.punched_at),
+      missed_out:
+        Boolean(row.openIn) && !isActivelyClockedIn('in', row.openIn.punched_at),
       total_label: formatHoursFromMs(row.total_ms),
       in_label: row.firstIn ? formatClock12(row.firstIn.punched_at) : null,
       out_label: row.lastOut ? formatClock12(row.lastOut.punched_at) : null,
+      out_date_label:
+        row.firstIn &&
+        row.lastOut &&
+        toLocalDateKey(row.lastOut.punched_at) !== toLocalDateKey(row.firstIn.punched_at)
+          ? new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(
+              new Date(row.lastOut.punched_at)
+            )
+          : null,
     }))
     .sort((a, b) => a.name.localeCompare(b.name));
 }

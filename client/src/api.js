@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { CAFE_ZONE, checkZone } from './lib/geofence';
+import { isActivelyClockedIn } from './lib/performance';
 
 const supabaseUrl =
   import.meta.env.VITE_SUPABASE_URL ||
@@ -96,7 +97,10 @@ async function getStaffDirect() {
   return sortStaff(
     (staff || []).map((person) => ({
       ...person,
-      is_clocked_in: statusMap[person.id]?.is_clocked_in ?? false,
+      is_clocked_in: isActivelyClockedIn(
+        statusMap[person.id]?.last_punch_type,
+        statusMap[person.id]?.last_punched_at
+      ),
       last_punch_type: statusMap[person.id]?.last_punch_type ?? null,
       last_punched_at: statusMap[person.id]?.last_punched_at ?? null,
     }))
@@ -173,7 +177,9 @@ async function punchDirect(body) {
     .maybeSingle();
   if (lastError) throw new Error(lastError.message);
 
-  const nextType = lastPunch?.type === 'in' ? 'out' : 'in';
+  const nextType = isActivelyClockedIn(lastPunch?.type, lastPunch?.punched_at)
+    ? 'out'
+    : 'in';
 
   const { data: punch, error: punchError } = await supabase
     .from('punches')
@@ -341,7 +347,14 @@ async function getPerformanceDirect(params = {}) {
   let end = null;
   let days;
 
-  if (/^\d{4}-\d{2}-\d{2}$/.test(weekStart)) {
+  const from = params.from ? new Date(params.from) : null;
+  const to = params.to ? new Date(params.to) : null;
+
+  if (from && to && !Number.isNaN(from.getTime()) && !Number.isNaN(to.getTime())) {
+    start = from;
+    end = to;
+    days = 7;
+  } else if (/^\d{4}-\d{2}-\d{2}$/.test(weekStart)) {
     start = new Date(`${weekStart}T00:00:00`);
     if (Number.isNaN(start.getTime())) throw new Error('Invalid week_start');
     end = new Date(start);
@@ -453,4 +466,71 @@ export const api = {
       staff: asArray(data?.staff),
     };
   },
+
+  // ——— Ordering System / POS (always via Express API for hardware + checkout) ———
+  posGetCategories: () => request('/api/pos/categories'),
+  posCreateCategory: (body) =>
+    request('/api/pos/categories', { method: 'POST', body: JSON.stringify(body) }),
+  posUpdateCategory: (id, body) =>
+    request(`/api/pos/categories/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    }),
+  posGetProducts: (params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return request(`/api/pos/products${qs ? `?${qs}` : ''}`);
+  },
+  posCreateProduct: (body) =>
+    request('/api/pos/products', { method: 'POST', body: JSON.stringify(body) }),
+  posUpdateProduct: (id, body) =>
+    request(`/api/pos/products/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    }),
+  posGetSettings: () => request('/api/pos/settings'),
+  posUpdateSettings: (body) =>
+    request('/api/pos/settings', { method: 'PUT', body: JSON.stringify(body) }),
+  posGetTables: () => request('/api/pos/tables'),
+  posGetOrders: (params = {}) => {
+    const qs = new URLSearchParams(
+      Object.fromEntries(
+        Object.entries(params).filter(([, v]) => v !== undefined && v !== '')
+      )
+    ).toString();
+    return request(`/api/pos/orders${qs ? `?${qs}` : ''}`);
+  },
+  posGetOrder: (id) => request(`/api/pos/orders/${id}`),
+  posCheckout: (body) =>
+    request('/api/pos/orders/checkout', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  posReprint: (id) =>
+    request(`/api/pos/orders/${id}/reprint`, { method: 'POST', body: '{}' }),
+  posCancelOrder: (id, body = {}) =>
+    request(`/api/pos/orders/${id}/cancel`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  posUpdateOrderStatus: (id, status) =>
+    request(`/api/pos/orders/${id}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status }),
+    }),
+  posDashboard: () => request('/api/pos/reports/dashboard'),
+  posSalesReport: (params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return request(`/api/pos/reports/sales${qs ? `?${qs}` : ''}`);
+  },
+  posGetInventory: () => request('/api/pos/inventory'),
+  posAdjustInventory: (body) =>
+    request('/api/pos/inventory/adjust', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  posHardwareStatus: () => request('/api/pos/hardware/status'),
+  posTestPrint: () =>
+    request('/api/pos/hardware/test-print', { method: 'POST', body: '{}' }),
+  posOpenDrawer: () =>
+    request('/api/pos/hardware/open-drawer', { method: 'POST', body: '{}' }),
 };

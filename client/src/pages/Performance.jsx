@@ -6,6 +6,7 @@ import {
   formatHours,
   formatWeekRange,
   startOfWeek,
+  weekPunchRange,
 } from '../lib/performance';
 import {
   calcPayRm,
@@ -38,6 +39,12 @@ function SalaryCard({ row }) {
         {' · '}
         {row.days_worked} day{row.days_worked === 1 ? '' : 's'}
       </span>
+      {row.missed_clock_outs > 0 && (
+        <span className="perf-card-meta salary-missed-out">
+          {row.missed_clock_outs} missed clock-out
+          {row.missed_clock_outs === 1 ? '' : 's'} · not paid, needs review
+        </span>
+      )}
       <p className="salary-pay">{formatRm(row.pay)}</p>
     </article>
   );
@@ -77,7 +84,10 @@ export default function Performance() {
     setLoading(true);
     setError('');
     try {
-      const data = await api.getPerformance({ week_start: selectedWeek });
+      const data = await api.getPerformance({
+        week_start: selectedWeek,
+        ...weekPunchRange(selectedWeek),
+      });
       setPayload({
         punches: Array.isArray(data?.punches) ? data.punches : [],
         staff: Array.isArray(data?.staff) ? data.staff : [],
@@ -95,9 +105,12 @@ export default function Performance() {
   }, [weekStart]);
 
   const rows = useMemo(() => {
-    const list = buildPerformance(payload.punches || [], payload.staff || []);
+    const list = buildPerformance(payload.punches || [], payload.staff || [], {
+      fromDate: weekStart,
+      toDate: addDays(weekStart, 6),
+    });
     return withPay([...list].sort((a, b) => a.name.localeCompare(b.name)));
-  }, [payload]);
+  }, [payload, weekStart]);
 
   const kitchen = useMemo(
     () => rows.filter((row) => isKitchenRole(row.role)),

@@ -5,6 +5,16 @@ import Proof from './pages/Proof';
 import Performance from './pages/Performance';
 import WeekOverview from './pages/WeekOverview';
 import Schedule from './pages/Schedule';
+import OrderingLayout from './pages/ordering/OrderingLayout';
+import DashboardPage from './pages/ordering/DashboardPage';
+import PosPage from './pages/ordering/PosPage';
+import OrdersPage from './pages/ordering/OrdersPage';
+import ProductsPage from './pages/ordering/ProductsPage';
+import CategoriesPage from './pages/ordering/CategoriesPage';
+import CustomersPage from './pages/ordering/CustomersPage';
+import InventoryPage from './pages/ordering/InventoryPage';
+import ReportsPage from './pages/ordering/ReportsPage';
+import SettingsPage from './pages/ordering/SettingsPage';
 import './App.css';
 
 export default function App() {
@@ -30,6 +40,7 @@ export default function App() {
           <NavLink to="/planning">Planning</NavLink>
           <NavLink to="/salary">Salary table</NavLink>
           <NavLink to="/staff">Staff</NavLink>
+          <NavLink to="/ordering">Ordering System</NavLink>
         </nav>
       </header>
       <main className="app-main">
@@ -40,6 +51,17 @@ export default function App() {
           <Route path="/proof" element={<Proof />} />
           <Route path="/salary" element={<Performance />} />
           <Route path="/staff" element={<StaffAdmin />} />
+          <Route path="/ordering" element={<OrderingLayout />}>
+            <Route index element={<DashboardPage />} />
+            <Route path="pos" element={<PosPage />} />
+            <Route path="orders" element={<OrdersPage />} />
+            <Route path="products" element={<ProductsPage />} />
+            <Route path="categories" element={<CategoriesPage />} />
+            <Route path="customers" element={<CustomersPage />} />
+            <Route path="inventory" element={<InventoryPage />} />
+            <Route path="reports" element={<ReportsPage />} />
+            <Route path="settings" element={<SettingsPage />} />
+          </Route>
           <Route path="/history" element={<Navigate to="/proof" replace />} />
           <Route path="/performance" element={<Navigate to="/salary" replace />} />
           <Route path="/week" element={<Navigate to="/working-schedule" replace />} />

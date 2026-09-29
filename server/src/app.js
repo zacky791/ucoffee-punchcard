@@ -6,6 +6,7 @@ if (!process.env.NETLIFY && !process.env.AWS_LAMBDA_FUNCTION_NAME) {
 const express = require('express');
 const cors = require('cors');
 const { createClient } = require('@supabase/supabase-js');
+const { createPosRouter } = require('./pos/routes');
 //location map
 const app = express();
 
@@ -85,6 +86,18 @@ function assertInsideCafeZone(latitude, longitude) {
     };
   }
   return { distance_m };
+}
+
+// A clock-in older than this with no clock-out is a missed clock-out.
+// Keep in sync with MAX_SHIFT_HOURS in client/src/lib/performance.js.
+const MAX_SHIFT_MS = 16 * 60 * 60 * 1000;
+
+function isActivelyClockedIn(lastPunchType, lastPunchedAt) {
+  return (
+    lastPunchType === 'in' &&
+    Boolean(lastPunchedAt) &&
+    Date.now() - new Date(lastPunchedAt).getTime() <= MAX_SHIFT_MS
+  );
 }
 
 const ROLE_ORDER = {
@@ -170,6 +183,9 @@ app.get('/api/health', (_req, res) => {
   });
 });
 
+// Café Ordering System / POS APIs
+app.use('/api/pos', createPosRouter(getSupabase));
+
 app.get('/api/staff', requireDb, async (_req, res) => {
   try {
     const { data: staff, error } = await getSupabase()
@@ -192,7 +208,10 @@ app.get('/api/staff', requireDb, async (_req, res) => {
     const enriched = sortStaff(
       (staff || []).map((person) => ({
         ...person,
-        is_clocked_in: statusMap[person.id]?.is_clocked_in ?? false,
+        is_clocked_in: isActivelyClockedIn(
+          statusMap[person.id]?.last_punch_type,
+          statusMap[person.id]?.last_punched_at
+        ),
         last_punch_type: statusMap[person.id]?.last_punch_type ?? null,
         last_punched_at: statusMap[person.id]?.last_punched_at ?? null,
       }))
@@ -303,7 +322,9 @@ app.post('/api/punch', requireDb, async (req, res) => {
 
     if (lastError) throw lastError;
 
-    const nextType = lastPunch?.type === 'in' ? 'out' : 'in';
+    const nextType = isActivelyClockedIn(lastPunch?.type, lastPunch?.punched_at)
+      ? 'out'
+      : 'in';
 
     const { data: punch, error: punchError } = await getSupabase()
       .from('punches')
@@ -511,11 +532,20 @@ app.put('/api/roster/:day', requireDb, async (req, res) => {
 app.get('/api/performance', requireDb, async (req, res) => {
   try {
     const weekStart = String(req.query.week_start || '');
+    const from = req.query.from ? new Date(String(req.query.from)) : null;
+    const to = req.query.to ? new Date(String(req.query.to)) : null;
     let start;
     let end = null;
     let days;
 
-    if (/^\d{4}-\d{2}-\d{2}$/.test(weekStart)) {
+    if (from && to && !Number.isNaN(from.getTime()) && !Number.isNaN(to.getTime())) {
+      if (to - from > 31 * 24 * 60 * 60 * 1000 || to <= from) {
+        return res.status(400).json({ error: 'from/to must span 1–31 days' });
+      }
+      start = from;
+      end = to;
+      days = 7;
+    } else if (/^\d{4}-\d{2}-\d{2}$/.test(weekStart)) {
       start = new Date(`${weekStart}T00:00:00`);
       if (Number.isNaN(start.getTime())) {
         return res.status(400).json({ error: 'Invalid week_start' });

@@ -1607,6 +1607,12 @@ select:focus {
   line-height: 1.3;
 }
 
+.week-mini-meta.week-mini-missed-out,
+.salary-missed-out {
+  color: var(--out);
+  font-weight: 600;
+}
+
 .week-mini-missed {
   border-color: rgba(138, 82, 68, 0.25) !important;
   background: rgba(138, 82, 68, 0.08) !important;

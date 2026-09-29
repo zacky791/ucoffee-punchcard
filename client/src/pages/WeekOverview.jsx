@@ -10,6 +10,7 @@ import {
   formatWeekRange,
   startOfWeek,
   toDateKey,
+  weekPunchRange,
 } from '../lib/performance';
 import { roleLabel } from '../lib/time';
 
@@ -32,7 +33,10 @@ export default function WeekOverview() {
     setError('');
     try {
       const [perf, rosterData, hoursData] = await Promise.all([
-        api.getPerformance({ week_start: selectedWeek }),
+        api.getPerformance({
+          week_start: selectedWeek,
+          ...weekPunchRange(selectedWeek),
+        }),
         api.getRoster({ week_start: selectedWeek }).catch(() => []),
         api.getHours().catch(() => []),
       ]);
@@ -159,14 +163,23 @@ export default function WeekOverview() {
                         <span className="week-mini-in">
                           In {person.in_label || '—'}
                         </span>
-                        <span className="week-mini-meta">
-                          Out{' '}
-                          {person.still_in
-                            ? 'still in'
-                            : person.out_label || '—'}
-                          {' · '}
-                          {person.total_label}
-                        </span>
+                        {person.missed_out ? (
+                          <span className="week-mini-meta week-mini-missed-out">
+                            Missed clock-out · {person.total_label}
+                          </span>
+                        ) : (
+                          <span className="week-mini-meta">
+                            Out{' '}
+                            {person.still_in
+                              ? 'still in'
+                              : person.out_label || '—'}
+                            {!person.still_in && person.out_date_label && (
+                              <> ({person.out_date_label})</>
+                            )}
+                            {' · '}
+                            {person.total_label}
+                          </span>
+                        )}
                       </li>
                     ))}
                     {day.missed.map((person) => (

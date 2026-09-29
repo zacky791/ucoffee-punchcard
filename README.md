@@ -1,25 +1,31 @@
-# U Coffee — Staff Punch Card
+# U Coffee — Staff Punch Card + Ordering System (POS)
 
-Clock-in / clock-out system for cafe staff.
+Clock-in / clock-out for cafe staff, plus a red-themed café POS under **Ordering System**.
 
-- **Frontend:** React (Vite)
-- **Backend:** Node.js + Express (local) / Netlify Functions (production)
-- **Database:** Supabase (free tier)
+- **Frontend:** React (Vite) — `client/`
+- **Backend:** Node.js + Express — `server/`
+- **Database:** Supabase (PostgreSQL)
+- **Hardware:** Provider-based printer / cash drawer layer (`mock` by default)
 
 ## Folder structure
 
 ```
 U Coffee/
 ├── client/              # React app
-├── server/              # Express API
+├── server/              # Express API (+ POS + hardware integrations)
 ├── netlify/functions/   # Serverless API wrapper for Netlify
-├── supabase/            # SQL schema
-└── netlify.toml         # Netlify build + redirects
+├── supabase/            # SQL schema (punch + POS)
+└── netlify.toml
 ```
 
 ## Local setup
 
-1. Create a free Supabase project and run `supabase/schema.sql` then `supabase/rls-publishable.sql`.
+1. Create / open your Supabase project and run:
+   - `supabase/schema.sql` (and any schedule migrations you already use)
+   - `supabase/rls-publishable.sql`
+   - **`supabase/pos-schema.sql`** (Ordering System tables + sample menu)
+   - **`supabase/pos-rls.sql`** (POS table grants / policies)
+
 2. Copy env:
 
 ```bash
@@ -39,39 +45,63 @@ npm run install:all
 npm run dev
 ```
 
-- UI: http://localhost:5173  
-- API: http://localhost:3001  
+- UI: http://localhost:5173
+- API: http://localhost:3001
+- Ordering System: http://localhost:5173/ordering
 
-## Deploy on Netlify (frontend + API together)
+> POS checkout and hardware always go through the Express API (Vite proxies `/api` → `:3001`). Keep the server running even if punch uses direct Supabase.
 
-1. Push this repo to GitHub.
-2. In Netlify: **Add new site → Import from Git**.
-3. Settings (handled by `netlify.toml` — leave Base directory **empty / repo root**):
-   - Build command: `npm run build:netlify`
-   - Publish directory: `client/dist`
-   - Functions directory: `netlify/functions`
-4. **Site settings → Environment variables** — add:
+## Ordering System
 
-| Key | Value |
-|-----|--------|
-| `SUPABASE_URL` | `https://vjorugrrizrpoojpocns.supabase.co` |
-| `SUPABASE_ANON_KEY` | your publishable / anon key |
+Top nav → **Ordering System**. Sidebar pages:
 
-Do **not** set `VITE_API_URL` on Netlify — the app calls `/api` on the same site.
+| Page | Path |
+|------|------|
+| Dashboard | `/ordering` |
+| New Order (POS) | `/ordering/pos` |
+| Orders | `/ordering/orders` |
+| Products | `/ordering/products` |
+| Categories | `/ordering/categories` |
+| Inventory | `/ordering/inventory` |
+| Reports | `/ordering/reports` |
+| Settings | `/ordering/settings` |
 
-5. Deploy. Staff punch and history should work.
+### Cashier / printer / cash drawer
 
-### Important
-- Do **not** set Base directory to `client` (that was why the old deploy served raw `.jsx`).
-- Use the **production deploy URL**, not only the draft preview, after a successful build.
+Browsers cannot open a physical cash drawer or silently print ESC/POS. After payment the backend calls `HardwareIntegrationService`:
 
-## How staff use it
+| Provider | Behavior |
+|----------|----------|
+| `mock` (default) | Logs receipt text + drawer kick in the **server** console |
+| `escpos` | Scaffold for USB/TCP/serial — needs your printer path/host before live I/O |
+| `local_bridge` | Forwards print/drawer to a service on the cashier PC (`LOCAL_BRIDGE_URL`) |
+| `cashier_api` | Adapter stub — wire real vendor endpoints when you have API docs |
+
+Configure under **Ordering System → Settings** (test connection / test print / open drawer).
+
+If print fails after a successful payment, the order is still saved — use **Retry print** on the success banner or Orders → Details → Reprint.
+
+### Sample POS API
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/pos/products` | Menu + modifiers |
+| POST | `/api/pos/orders/checkout` | Pay, save, print, open drawer |
+| GET | `/api/pos/orders` | Order list |
+| POST | `/api/pos/orders/:id/reprint` | Reprint receipt |
+| GET | `/api/pos/reports/dashboard` | Today’s sales |
+| GET/PUT | `/api/pos/settings` | Café + hardware config |
+
+## Deploy on Netlify
+
+Same as before (`netlify.toml`). After deploy, run `pos-schema.sql` + `pos-rls.sql` on Supabase. For USB printers with a remote API, run a **local hardware bridge** on the cashier PC and set provider to `local_bridge`.
+
+## Staff punch (existing)
 
 1. Open **Punch**.
 2. Tap your name → check GPS map → confirm clock in/out.
-3. **History** shows all dates; expand a person for punch details + map.
 
-## API overview
+## Punch API overview
 
 | Method | Path | Description |
 |--------|------|-------------|
@@ -82,5 +112,3 @@ Do **not** set `VITE_API_URL` on Netlify — the app calls `/api` on the same si
 | POST | `/api/punch` | Clock in/out with GPS |
 | GET | `/api/punches` | Punch history |
 | GET | `/api/punches/today` | Today's punches |
-# ucoffee-punchcard
-# ucoffee-punchcard
