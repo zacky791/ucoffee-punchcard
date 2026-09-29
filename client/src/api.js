@@ -592,6 +592,29 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(body),
     }),
+  posCreateInventory: (body) =>
+    request('/api/pos/inventory', { method: 'POST', body: JSON.stringify(body) }),
+  posUpdateInventory: (id, body) =>
+    request(`/api/pos/inventory/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    }),
+  posStockMovements: (limit = 40) =>
+    request(`/api/pos/inventory/movements?limit=${limit}`),
+  posGetCosting: () => request('/api/pos/costing'),
+  posSaveCosting: (productId, body) =>
+    request(`/api/pos/products/${productId}/costing`, {
+      method: 'PUT',
+      body: JSON.stringify(body),
+    }),
+  posSummaryReport: (params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return request(`/api/pos/reports/summary${qs ? `?${qs}` : ''}`);
+  },
+  posProfitReport: (params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return request(`/api/pos/reports/profit${qs ? `?${qs}` : ''}`);
+  },
   posHardwareStatus: () => request('/api/pos/hardware/status'),
   posTestPrint: () =>
     request('/api/pos/hardware/test-print', { method: 'POST', body: '{}' }),

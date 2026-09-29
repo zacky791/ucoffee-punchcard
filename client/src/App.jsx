@@ -14,6 +14,8 @@ import CategoriesPage from './pages/ordering/CategoriesPage';
 import CustomersPage from './pages/ordering/CustomersPage';
 import InventoryPage from './pages/ordering/InventoryPage';
 import ReportsPage from './pages/ordering/ReportsPage';
+import ProfitPage from './pages/ordering/ProfitPage';
+import RecipePage from './pages/ordering/RecipePage';
 import SettingsPage from './pages/ordering/SettingsPage';
 import './App.css';
 
@@ -59,6 +61,8 @@ export default function App() {
             <Route path="categories" element={<CategoriesPage />} />
             <Route path="customers" element={<CustomersPage />} />
             <Route path="inventory" element={<InventoryPage />} />
+            <Route path="recipe" element={<RecipePage />} />
+            <Route path="profit" element={<ProfitPage />} />
             <Route path="reports" element={<ReportsPage />} />
             <Route path="settings" element={<SettingsPage />} />
           </Route>

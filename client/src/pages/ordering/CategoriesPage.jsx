@@ -29,9 +29,9 @@ export default function CategoriesPage() {
     }
   }
 
-  async function toggle(cat) {
+  async function update(cat, body) {
     try {
-      await api.posUpdateCategory(cat.id, { active: !cat.active });
+      await api.posUpdateCategory(cat.id, body);
       await load();
     } catch (err) {
       setError(err.message);
@@ -67,6 +67,7 @@ export default function CategoriesPage() {
             <tr>
               <th>Name</th>
               <th>Order</th>
+              <th>Type</th>
               <th>Status</th>
               <th />
             </tr>
@@ -78,13 +79,24 @@ export default function CategoriesPage() {
                   <strong>{c.name}</strong>
                 </td>
                 <td data-label="Order">{c.sort_order}</td>
+                <td data-label="Type">
+                  <select
+                    className="pos-select"
+                    aria-label={`${c.name} type`}
+                    value={c.kind || 'food'}
+                    onChange={(e) => update(c, { kind: e.target.value })}
+                  >
+                    <option value="drink">Drink</option>
+                    <option value="food">Food</option>
+                  </select>
+                </td>
                 <td data-label="Status">
                   <span className={`pos-badge ${c.active ? 'ok' : 'off'}`}>
                     {c.active ? 'Active' : 'Inactive'}
                   </span>
                 </td>
                 <td className="pos-cell-action">
-                  <button type="button" className="pos-btn ghost" onClick={() => toggle(c)}>
+                  <button type="button" className="pos-btn ghost" onClick={() => update(c, { active: !c.active })}>
                     {c.active ? 'Deactivate' : 'Activate'}
                   </button>
                 </td>

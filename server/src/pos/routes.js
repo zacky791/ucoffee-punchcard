@@ -137,36 +137,166 @@ function createPosRouter(getSupabase) {
     };
   }
 
+  function sendError(res, err) {
+    const missingColumn = err?.code === '42703' || err?.code === 'PGRST204';
+    res.status(err?.status || 500).json({
+      error: missingColumn
+        ? `${err.message}. Run supabase/pos-costing.sql and supabase/pos-recipe.sql in the Supabase SQL Editor.`
+        : err?.message || 'Request failed',
+    });
+  }
+
+  function qty3(n) {
+    return Math.round(Number(n || 0) * 1000) / 1000;
+  }
+
+  function costPerUnit(inv) {
+    const size = Number(inv?.pack_size) || 0;
+    return size > 0 ? Number(inv.pack_price || 0) / size : 0;
+  }
+
+  function marginPct(profit, price) {
+    return Number(price) > 0 ? Math.round((profit / Number(price)) * 1000) / 10 : null;
+  }
+
+  function periodStart(period) {
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+    if (period === 'weekly') start.setDate(start.getDate() - 6);
+    if (period === 'monthly') start.setDate(1);
+    return start;
+  }
+
+  // Explicit from/to (sent by the browser in cafe local time) wins over ?period.
+  function reportRange(query) {
+    const from = query.from ? new Date(String(query.from)) : null;
+    const to = query.to ? new Date(String(query.to)) : null;
+    if (from && to && !Number.isNaN(from.getTime()) && !Number.isNaN(to.getTime()) && to > from) {
+      return { start: from, end: to };
+    }
+    return { start: periodStart(query.period || 'daily'), end: new Date() };
+  }
+
+  // Unit cost per product = sum(recipe qty × ingredient cost per unit) + extra_cost.
+  async function loadProductCosts(db, productIds) {
+    const ids = [...new Set(productIds.filter(Boolean))];
+    const costs = {};
+    if (!ids.length) return costs;
+
+    const [{ data: products, error: pErr }, { data: links, error: lErr }] = await Promise.all([
+      db.from('pos_products').select('id, extra_cost').in('id', ids),
+      db
+        .from('pos_product_ingredients')
+        .select(
+          'product_id, inventory_item_id, quantity_per_unit, item:pos_inventory_items(id, name, unit, pack_price, pack_size)'
+        )
+        .in('product_id', ids),
+    ]);
+    if (pErr) throw pErr;
+    if (lErr) throw lErr;
+
+    for (const p of products || []) {
+      costs[p.id] = {
+        extra_cost: money(p.extra_cost),
+        ingredients: [],
+        ingredient_cost: 0,
+        total_cost: 0,
+      };
+    }
+    for (const l of links || []) {
+      const entry = costs[l.product_id];
+      if (!entry) continue;
+      const unitCost = costPerUnit(l.item);
+      const cost = Number(l.quantity_per_unit) * unitCost;
+      entry.ingredients.push({
+        inventory_item_id: l.inventory_item_id,
+        name: l.item?.name || 'Unknown item',
+        unit: l.item?.unit || '',
+        quantity_per_unit: Number(l.quantity_per_unit),
+        cost_per_unit: unitCost,
+        cost: Math.round(cost * 10000) / 10000,
+      });
+      entry.ingredient_cost += cost;
+    }
+    for (const entry of Object.values(costs)) {
+      entry.ingredients.sort((a, b) => a.name.localeCompare(b.name));
+      entry.ingredient_cost = Math.round(entry.ingredient_cost * 10000) / 10000;
+      entry.total_cost = Math.round((entry.ingredient_cost + entry.extra_cost) * 10000) / 10000;
+    }
+    return costs;
+  }
+
+  // changes: { [inventory_item_id]: signed quantity }
+  async function moveStock(db, changes, { type, note, orderId = null }) {
+    const ids = Object.keys(changes).filter((id) => qty3(changes[id]) !== 0);
+    if (!ids.length) return;
+    const { data: items, error } = await db
+      .from('pos_inventory_items')
+      .select('id, quantity')
+      .in('id', ids);
+    if (error) throw error;
+    for (const inv of items || []) {
+      const delta = qty3(changes[inv.id]);
+      const { error: upErr } = await db
+        .from('pos_inventory_items')
+        .update({ quantity: qty3(Number(inv.quantity) + delta) })
+        .eq('id', inv.id);
+      if (upErr) throw upErr;
+      await db.from('pos_stock_movements').insert({
+        inventory_item_id: inv.id,
+        type,
+        quantity: delta,
+        note,
+        order_id: orderId,
+      });
+    }
+  }
+
   async function deductInventory(db, order) {
+    const soldByProduct = {};
     for (const item of order.items || []) {
       if (!item.product_id) continue;
-      const { data: links, error } = await db
-        .from('pos_product_ingredients')
-        .select('inventory_item_id, quantity_per_unit')
-        .eq('product_id', item.product_id);
-      if (error) throw error;
-      for (const link of links || []) {
-        const qty = money(Number(link.quantity_per_unit) * Number(item.quantity));
-        const { data: inv, error: invError } = await db
-          .from('pos_inventory_items')
-          .select('id, quantity')
-          .eq('id', link.inventory_item_id)
-          .single();
-        if (invError) throw invError;
-        const next = money(Number(inv.quantity) - qty);
-        await db
-          .from('pos_inventory_items')
-          .update({ quantity: next })
-          .eq('id', inv.id);
-        await db.from('pos_stock_movements').insert({
-          inventory_item_id: inv.id,
-          type: 'order',
-          quantity: -qty,
-          note: `Order ${order.order_number}`,
-          order_id: order.id,
-        });
-      }
+      soldByProduct[item.product_id] =
+        (soldByProduct[item.product_id] || 0) + Number(item.quantity);
     }
+    const productIds = Object.keys(soldByProduct);
+    if (!productIds.length) return;
+
+    const { data: links, error } = await db
+      .from('pos_product_ingredients')
+      .select('product_id, inventory_item_id, quantity_per_unit')
+      .in('product_id', productIds);
+    if (error) throw error;
+
+    const usage = {};
+    for (const l of links || []) {
+      usage[l.inventory_item_id] =
+        (usage[l.inventory_item_id] || 0) -
+        Number(l.quantity_per_unit) * soldByProduct[l.product_id];
+    }
+    await moveStock(db, usage, {
+      type: 'order',
+      note: `Order ${order.order_number}`,
+      orderId: order.id,
+    });
+  }
+
+  async function restoreInventory(db, order) {
+    const { data: moves, error } = await db
+      .from('pos_stock_movements')
+      .select('inventory_item_id, quantity')
+      .eq('order_id', order.id)
+      .eq('type', 'order');
+    if (error) throw error;
+    const back = {};
+    for (const m of moves || []) {
+      back[m.inventory_item_id] = (back[m.inventory_item_id] || 0) - Number(m.quantity);
+    }
+    await moveStock(db, back, {
+      type: 'in',
+      note: `Cancelled ${order.order_number}`,
+      orderId: order.id,
+    });
   }
 
   // ——— Categories ———
@@ -193,13 +323,14 @@ function createPosRouter(getSupabase) {
           name,
           sort_order: Number(req.body?.sort_order) || 0,
           active: req.body?.active !== false,
+          ...(['drink', 'food'].includes(req.body?.kind) && { kind: req.body.kind }),
         })
         .select('*')
         .single();
       if (error) throw error;
       res.status(201).json(data);
     } catch (err) {
-      res.status(500).json({ error: err.message });
+      sendError(res, err);
     }
   });
 
@@ -209,6 +340,7 @@ function createPosRouter(getSupabase) {
       if (req.body?.name) updates.name = String(req.body.name).trim();
       if (req.body?.sort_order !== undefined) updates.sort_order = Number(req.body.sort_order);
       if (typeof req.body?.active === 'boolean') updates.active = req.body.active;
+      if (['drink', 'food'].includes(req.body?.kind)) updates.kind = req.body.kind;
       const { data, error } = await req.supabase
         .from('pos_categories')
         .update(updates)
@@ -218,7 +350,7 @@ function createPosRouter(getSupabase) {
       if (error) throw error;
       res.json(data);
     } catch (err) {
-      res.status(500).json({ error: err.message });
+      sendError(res, err);
     }
   });
 
@@ -501,7 +633,17 @@ function createPosRouter(getSupabase) {
         .single();
       if (orderError) throw orderError;
 
-      const itemRows = items.map((item) => ({ ...item, order_id: order.id }));
+      let costs = null;
+      try {
+        costs = await loadProductCosts(db, items.map((i) => i.product_id));
+      } catch (costErr) {
+        console.error('cost lookup failed (run supabase/pos-costing.sql?)', costErr.message);
+      }
+      const itemRows = items.map((item) => ({
+        ...item,
+        order_id: order.id,
+        ...(costs && { unit_cost: costs[item.product_id]?.total_cost ?? null }),
+      }));
       const { error: itemsError } = await db.from('pos_order_items').insert(itemRows);
       if (itemsError) throw itemsError;
 
@@ -668,7 +810,15 @@ function createPosRouter(getSupabase) {
         .select('*')
         .single();
       if (upErr) throw upErr;
-      res.json(data);
+
+      let inventoryWarning = null;
+      try {
+        await restoreInventory(req.supabase, order);
+      } catch (invErr) {
+        inventoryWarning = invErr.message;
+        console.error('inventory restore failed', invErr);
+      }
+      res.json({ ...data, inventory_warning: inventoryWarning });
     } catch (err) {
       res.status(500).json({ error: err.message });
     }
@@ -781,9 +931,157 @@ function createPosRouter(getSupabase) {
         .select('*')
         .order('name');
       if (error) throw error;
+      res.json((data || []).map((i) => ({ ...i, cost_per_unit: costPerUnit(i) })));
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  function inventoryFields(body) {
+    const out = {};
+    if (body.name !== undefined) out.name = String(body.name).trim();
+    if (body.unit !== undefined) out.unit = String(body.unit).trim() || 'pcs';
+    if (body.min_threshold !== undefined) out.min_threshold = qty3(body.min_threshold);
+    if (body.pack_price !== undefined) out.pack_price = money(Math.max(0, Number(body.pack_price) || 0));
+    if (body.pack_size !== undefined) {
+      const size = qty3(body.pack_size);
+      if (size <= 0) throw Object.assign(new Error('Pack size must be more than 0'), { status: 400 });
+      out.pack_size = size;
+    }
+    if (typeof body.active === 'boolean') out.active = body.active;
+    return out;
+  }
+
+  router.post('/inventory', requireDb, async (req, res) => {
+    try {
+      const body = req.body || {};
+      if (!String(body.name || '').trim()) {
+        return res.status(400).json({ error: 'name is required' });
+      }
+      const { data, error } = await req.supabase
+        .from('pos_inventory_items')
+        .insert({ ...inventoryFields(body), quantity: qty3(body.quantity) })
+        .select('*')
+        .single();
+      if (error) throw error;
+      if (Number(data.quantity)) {
+        await req.supabase.from('pos_stock_movements').insert({
+          inventory_item_id: data.id,
+          type: 'in',
+          quantity: Number(data.quantity),
+          note: 'Opening stock',
+        });
+      }
+      res.status(201).json({ ...data, cost_per_unit: costPerUnit(data) });
+    } catch (err) {
+      sendError(res, err);
+    }
+  });
+
+  router.patch('/inventory/:id', requireDb, async (req, res) => {
+    try {
+      const { data, error } = await req.supabase
+        .from('pos_inventory_items')
+        .update(inventoryFields(req.body || {}))
+        .eq('id', req.params.id)
+        .select('*')
+        .single();
+      if (error) throw error;
+      res.json({ ...data, cost_per_unit: costPerUnit(data) });
+    } catch (err) {
+      sendError(res, err);
+    }
+  });
+
+  router.get('/inventory/movements', requireDb, async (req, res) => {
+    try {
+      const limit = Math.min(200, Math.max(1, Number(req.query.limit) || 40));
+      const { data, error } = await req.supabase
+        .from('pos_stock_movements')
+        .select('*, item:pos_inventory_items(name, unit)')
+        .order('created_at', { ascending: false })
+        .limit(limit);
+      if (error) throw error;
       res.json(data || []);
     } catch (err) {
       res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ——— Costing / profit margin ———
+  router.get('/costing', requireDb, async (req, res) => {
+    try {
+      const { data: products, error } = await req.supabase
+        .from('pos_products')
+        .select('*, category:pos_categories(*)')
+        .order('sort_order');
+      if (error) throw error;
+      const costs = await loadProductCosts(req.supabase, (products || []).map((p) => p.id));
+      const catOrder = (p) => p.category?.sort_order ?? Number.MAX_SAFE_INTEGER;
+      const rows = (products || [])
+        .sort((a, b) => catOrder(a) - catOrder(b) || a.sort_order - b.sort_order)
+        .map((p) => {
+          const c = costs[p.id] || { extra_cost: 0, ingredients: [], ingredient_cost: 0, total_cost: 0 };
+          const price = Number(p.base_price);
+          const profit = money(price - c.total_cost);
+          return {
+            ...p,
+            ...c,
+            profit,
+            margin: marginPct(price - c.total_cost, price),
+          };
+        });
+      res.json(rows);
+    } catch (err) {
+      sendError(res, err);
+    }
+  });
+
+  router.put('/products/:id/costing', requireDb, async (req, res) => {
+    const db = req.supabase;
+    try {
+      const body = req.body || {};
+      const productId = req.params.id;
+
+      const updates = { updated_at: new Date().toISOString() };
+      if (body.extra_cost !== undefined) {
+        updates.extra_cost = money(Math.max(0, Number(body.extra_cost) || 0));
+      }
+      if (body.recipe_notes !== undefined) {
+        updates.recipe_notes = String(body.recipe_notes || '').slice(0, 4000) || null;
+      }
+      const { error: upErr } = await db.from('pos_products').update(updates).eq('id', productId);
+      if (upErr) throw upErr;
+
+      if (Array.isArray(body.ingredients)) {
+        const merged = {};
+        for (const row of body.ingredients) {
+          const qty = qty3(row.quantity_per_unit);
+          if (!row.inventory_item_id || qty <= 0) continue;
+          merged[row.inventory_item_id] = qty3((merged[row.inventory_item_id] || 0) + qty);
+        }
+
+        const { error: delErr } = await db
+          .from('pos_product_ingredients')
+          .delete()
+          .eq('product_id', productId);
+        if (delErr) throw delErr;
+
+        const rows = Object.entries(merged).map(([inventory_item_id, quantity_per_unit]) => ({
+          product_id: productId,
+          inventory_item_id,
+          quantity_per_unit,
+        }));
+        if (rows.length) {
+          const { error: insErr } = await db.from('pos_product_ingredients').insert(rows);
+          if (insErr) throw insErr;
+        }
+      }
+
+      const costs = await loadProductCosts(db, [productId]);
+      res.json(costs[productId] || null);
+    } catch (err) {
+      sendError(res, err);
     }
   });
 
@@ -793,7 +1091,7 @@ function createPosRouter(getSupabase) {
       if (!inventory_item_id) {
         return res.status(400).json({ error: 'inventory_item_id required' });
       }
-      const qty = money(quantity);
+      const qty = qty3(quantity);
       const { data: item, error } = await req.supabase
         .from('pos_inventory_items')
         .select('*')
@@ -808,7 +1106,7 @@ function createPosRouter(getSupabase) {
 
       const { data, error: upErr } = await req.supabase
         .from('pos_inventory_items')
-        .update({ quantity: money(next) })
+        .update({ quantity: qty3(next) })
         .eq('id', item.id)
         .select('*')
         .single();
@@ -817,7 +1115,7 @@ function createPosRouter(getSupabase) {
       await req.supabase.from('pos_stock_movements').insert({
         inventory_item_id: item.id,
         type: ['in', 'out', 'adjust'].includes(type) ? type : 'adjust',
-        quantity: type === 'adjust' ? money(next - Number(item.quantity)) : money(type === 'out' ? -Math.abs(qty) : Math.abs(qty)),
+        quantity: type === 'adjust' ? qty3(next - Number(item.quantity)) : qty3(type === 'out' ? -Math.abs(qty) : Math.abs(qty)),
         note: note || null,
       });
 
@@ -837,7 +1135,7 @@ function createPosRouter(getSupabase) {
 
       const { data: orders, error } = await req.supabase
         .from('pos_orders')
-        .select('id, order_number, status, grand_total, created_at, cashier_name')
+        .select('id, order_number, status, grand_total, created_at')
         .gte('created_at', start.toISOString())
         .lte('created_at', end.toISOString())
         .order('created_at', { ascending: false });
@@ -928,17 +1226,13 @@ function createPosRouter(getSupabase) {
   router.get('/reports/sales', requireDb, async (req, res) => {
     try {
       const period = req.query.period || 'daily';
-      const now = new Date();
-      let start = new Date();
-      start.setHours(0, 0, 0, 0);
-      if (period === 'weekly') start.setDate(start.getDate() - 6);
-      if (period === 'monthly') start.setDate(1);
+      const { start, end } = reportRange(req.query);
 
       const { data: orders, error } = await req.supabase
         .from('pos_orders')
         .select('*')
         .gte('created_at', start.toISOString())
-        .lte('created_at', now.toISOString())
+        .lt('created_at', end.toISOString())
         .in('status', ['paid', 'preparing', 'ready', 'completed']);
       if (error) throw error;
 
@@ -959,7 +1253,6 @@ function createPosRouter(getSupabase) {
       }
 
       const byProduct = {};
-      const byCashier = {};
       const byMethod = {};
       for (const it of items) {
         byProduct[it.product_name] ||= { product_name: it.product_name, quantity: 0, sales: 0 };
@@ -968,12 +1261,6 @@ function createPosRouter(getSupabase) {
           byProduct[it.product_name].sales + Number(it.line_total)
         );
       }
-      for (const o of orders || []) {
-        const key = o.cashier_name || 'Unknown';
-        byCashier[key] ||= { cashier_name: key, orders: 0, sales: 0 };
-        byCashier[key].orders += 1;
-        byCashier[key].sales = money(byCashier[key].sales + Number(o.grand_total));
-      }
       for (const p of payments) {
         byMethod[p.method] = money((byMethod[p.method] || 0) + Number(p.amount));
       }
@@ -981,15 +1268,280 @@ function createPosRouter(getSupabase) {
       res.json({
         period,
         from: start.toISOString(),
-        to: now.toISOString(),
+        to: end.toISOString(),
         total_sales: money((orders || []).reduce((s, o) => s + Number(o.grand_total), 0)),
         order_count: (orders || []).length,
         products: Object.values(byProduct).sort((a, b) => b.sales - a.sales),
-        cashiers: Object.values(byCashier).sort((a, b) => b.sales - a.sales),
         payment_methods: byMethod,
       });
     } catch (err) {
       res.status(500).json({ error: err.message });
+    }
+  });
+
+  const PAID_STATUSES = ['paid', 'preparing', 'ready', 'completed'];
+  const CAFE_TZ = process.env.CAFE_TZ || 'Asia/Kuala_Lumpur';
+  const BUSINESS_CUTOFF_MS = 6 * 60 * 60 * 1000;
+  const tzParts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: CAFE_TZ,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    hourCycle: 'h23',
+  });
+
+  function localParts(date) {
+    const p = Object.fromEntries(tzParts.formatToParts(date).map((x) => [x.type, x.value]));
+    return { date: `${p.year}-${p.month}-${p.day}`, hour: Number(p.hour) };
+  }
+
+  // Business date rolls over at 6 AM cafe time, same as shifts.
+  function businessDate(iso) {
+    return localParts(new Date(new Date(iso).getTime() - BUSINESS_CUTOFF_MS)).date;
+  }
+
+  async function fetchAll(buildQuery) {
+    const rows = [];
+    for (let from = 0; ; from += 1000) {
+      const { data, error } = await buildQuery().range(from, from + 999);
+      if (error) throw error;
+      rows.push(...(data || []));
+      if (!data || data.length < 1000) return rows;
+    }
+  }
+
+  router.get('/reports/summary', requireDb, async (req, res) => {
+    try {
+      const db = req.supabase;
+      const { start, end } = reportRange(req.query);
+      const bucket = req.query.bucket === 'month' ? 'month' : 'day';
+      const keyOf = (iso) => {
+        const d = businessDate(iso);
+        return bucket === 'month' ? d.slice(0, 7) : d;
+      };
+
+      const [orders, items] = await Promise.all([
+        fetchAll(() =>
+          db
+            .from('pos_orders')
+            .select('id, created_at, subtotal, discount')
+            .gte('created_at', start.toISOString())
+            .lt('created_at', end.toISOString())
+            .in('status', PAID_STATUSES)
+            .order('id')
+        ),
+        fetchAll(() =>
+          db
+            .from('pos_order_items')
+            .select('id, product_id, product_name, quantity, line_total, unit_cost, pos_orders!inner(created_at, status)')
+            .gte('pos_orders.created_at', start.toISOString())
+            .lt('pos_orders.created_at', end.toISOString())
+            .in('pos_orders.status', PAID_STATUSES)
+            .order('id')
+        ),
+      ]);
+
+      const missing = items.filter((it) => it.unit_cost == null).map((it) => it.product_id);
+      const current = missing.length ? await loadProductCosts(db, missing) : {};
+
+      const buckets = {};
+      const ensureBucket = (key) =>
+        (buckets[key] ||= { key, sales: 0, cost: 0, orders: 0, discount: 0 });
+      const hours = Array.from({ length: 24 }, (_, hour) => ({ hour, orders: 0, sales: 0 }));
+      const weekdays = Array.from({ length: 7 }, (_, dow) => ({
+        dow,
+        orders: 0,
+        sales: 0,
+        dates: new Set(),
+      }));
+
+      let sales = 0;
+      let discount = 0;
+      for (const o of orders) {
+        const net = Number(o.subtotal) - Number(o.discount || 0);
+        const b = ensureBucket(keyOf(o.created_at));
+        b.sales += net;
+        b.orders += 1;
+        b.discount += Number(o.discount || 0);
+        sales += net;
+        discount += Number(o.discount || 0);
+
+        const { hour } = localParts(new Date(o.created_at));
+        hours[hour].orders += 1;
+        hours[hour].sales += net;
+
+        const bd = businessDate(o.created_at);
+        const dow = new Date(`${bd}T00:00:00Z`).getUTCDay();
+        weekdays[dow].orders += 1;
+        weekdays[dow].sales += net;
+        weekdays[dow].dates.add(bd);
+      }
+
+      const byProduct = {};
+      let cost = 0;
+      let estimated = 0;
+      let itemsSold = 0;
+      for (const it of items) {
+        let unit = it.unit_cost;
+        if (unit == null) {
+          unit = current[it.product_id]?.total_cost ?? 0;
+          estimated += Number(it.quantity);
+        }
+        const lineCost = Number(unit) * Number(it.quantity);
+        cost += lineCost;
+        itemsSold += Number(it.quantity);
+        ensureBucket(keyOf(it.pos_orders.created_at)).cost += lineCost;
+        const row = (byProduct[it.product_name] ||= {
+          product_id: it.product_id,
+          product_name: it.product_name,
+          quantity: 0,
+          sales: 0,
+          cost: 0,
+        });
+        row.quantity += Number(it.quantity);
+        row.sales += Number(it.line_total);
+        row.cost += lineCost;
+      }
+
+      const gross = money(sales - cost);
+      res.json({
+        from: start.toISOString(),
+        to: end.toISOString(),
+        bucket,
+        totals: {
+          sales: money(sales),
+          cost: money(cost),
+          gross,
+          margin: marginPct(gross, sales),
+          discount: money(discount),
+          orders: orders.length,
+          items_sold: itemsSold,
+          estimated_items: estimated,
+        },
+        buckets: Object.values(buckets)
+          .map((b) => ({
+            ...b,
+            sales: money(b.sales),
+            cost: money(b.cost),
+            gross: money(b.sales - b.cost),
+            discount: money(b.discount),
+          }))
+          .sort((a, b) => a.key.localeCompare(b.key)),
+        products: Object.values(byProduct)
+          .map((p) => {
+            const profit = money(p.sales - p.cost);
+            return {
+              ...p,
+              sales: money(p.sales),
+              cost: money(p.cost),
+              profit,
+              margin: marginPct(profit, p.sales),
+            };
+          })
+          .sort((a, b) => b.profit - a.profit),
+        hours: hours.map((h) => ({ ...h, sales: money(h.sales) })),
+        weekdays: weekdays.map(({ dates, ...w }) => ({
+          ...w,
+          sales: money(w.sales),
+          days: dates.size,
+        })),
+      });
+    } catch (err) {
+      sendError(res, err);
+    }
+  });
+
+  router.get('/reports/profit', requireDb, async (req, res) => {
+    try {
+      const period = req.query.period || 'daily';
+      const { start, end } = reportRange(req.query);
+
+      const { data: orders, error } = await req.supabase
+        .from('pos_orders')
+        .select('id, subtotal, discount')
+        .gte('created_at', start.toISOString())
+        .lt('created_at', end.toISOString())
+        .in('status', ['paid', 'preparing', 'ready', 'completed']);
+      if (error) throw error;
+
+      const ids = (orders || []).map((o) => o.id);
+      let items = [];
+      const paymentMethods = {};
+      if (ids.length) {
+        const [{ data, error: itemsErr }, { data: payRows, error: payErr }] = await Promise.all([
+          req.supabase.from('pos_order_items').select('*').in('order_id', ids),
+          req.supabase
+            .from('pos_payments')
+            .select('method, amount')
+            .in('order_id', ids)
+            .eq('status', 'completed'),
+        ]);
+        if (itemsErr) throw itemsErr;
+        if (payErr) throw payErr;
+        items = data || [];
+        for (const p of payRows || []) {
+          paymentMethods[p.method] = money((paymentMethods[p.method] || 0) + Number(p.amount));
+        }
+      }
+
+      const missing = items.filter((it) => it.unit_cost == null).map((it) => it.product_id);
+      const current = missing.length ? await loadProductCosts(req.supabase, missing) : {};
+
+      const byProduct = {};
+      let cost = 0;
+      let estimated = 0;
+      for (const it of items) {
+        let unit = it.unit_cost;
+        if (unit == null) {
+          unit = current[it.product_id]?.total_cost ?? 0;
+          estimated += Number(it.quantity);
+        }
+        const lineCost = Number(unit) * Number(it.quantity);
+        cost += lineCost;
+        const row = (byProduct[it.product_name] ||= {
+          product_name: it.product_name,
+          quantity: 0,
+          sales: 0,
+          cost: 0,
+        });
+        row.quantity += Number(it.quantity);
+        row.sales += Number(it.line_total);
+        row.cost += lineCost;
+      }
+
+      const sales = money(
+        (orders || []).reduce((s, o) => s + Number(o.subtotal) - Number(o.discount || 0), 0)
+      );
+      const totalCost = money(cost);
+      const profit = money(sales - totalCost);
+
+      res.json({
+        period,
+        from: start.toISOString(),
+        to: end.toISOString(),
+        order_count: (orders || []).length,
+        sales,
+        cost: totalCost,
+        profit,
+        margin: marginPct(profit, sales),
+        estimated_items: estimated,
+        payment_methods: paymentMethods,
+        products: Object.values(byProduct)
+          .map((p) => {
+            const pProfit = money(p.sales - p.cost);
+            return {
+              ...p,
+              sales: money(p.sales),
+              cost: money(p.cost),
+              profit: pProfit,
+              margin: marginPct(pProfit, p.sales),
+            };
+          })
+          .sort((a, b) => b.profit - a.profit),
+      });
+    } catch (err) {
+      sendError(res, err);
     }
   });
 

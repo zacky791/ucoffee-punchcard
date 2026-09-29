@@ -22,7 +22,6 @@ export default function PosPage() {
   const [products, setProducts] = useState([]);
   const [tables, setTables] = useState([]);
   const [settings, setSettings] = useState(null);
-  const [staff, setStaff] = useState([]);
   const [categoryId, setCategoryId] = useState('all');
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
@@ -44,23 +43,17 @@ export default function PosPage() {
       setLoading(true);
       setError('');
       try {
-        const [cats, prods, tbls, sett, people] = await Promise.all([
+        const [cats, prods, tbls, sett] = await Promise.all([
           api.posGetCategories(),
           api.posGetProducts({ active: 'true' }),
           api.posGetTables(),
           api.posGetSettings(),
-          api.getStaff().catch(() => []),
         ]);
         if (!alive) return;
         setCategories((cats || []).filter((c) => c.active !== false));
         setProducts(prods || []);
         setTables(tbls || []);
         setSettings(sett);
-        setStaff(people || []);
-        if (!cart.cashierName || cart.cashierName === 'Cashier') {
-          const first = (people || [])[0];
-          if (first) cart.setCashier(first.id, first.name);
-        }
       } catch (err) {
         if (alive) setError(err.message || 'Failed to load menu');
       } finally {
@@ -70,7 +63,6 @@ export default function PosPage() {
     return () => {
       alive = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const currency = settings?.currency || 'MYR';
@@ -116,27 +108,7 @@ export default function PosPage() {
       <div className="pos-page-head">
         <div>
           <h1>New Order</h1>
-          <p className="pos-meta">
-            {clock} · Cashier{' '}
-            <strong>
-              <select
-                className="pos-select"
-                value={cart.cashierId || ''}
-                onChange={(e) => {
-                  const person = staff.find((s) => s.id === e.target.value);
-                  cart.setCashier(person?.id || null, person?.name || 'Cashier');
-                }}
-                style={{ marginLeft: 6 }}
-              >
-                <option value="">Select cashier</option>
-                {staff.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}
-                  </option>
-                ))}
-              </select>
-            </strong>
-          </p>
+          <p className="pos-meta">{clock}</p>
         </div>
         {settings?.hardware_provider === 'phone' && (
           <PrinterConnectButton onError={setError} />
@@ -611,8 +583,6 @@ function CheckoutModal({ currency, grandTotal, methods, cart, onClose, onPaid })
         table_label: cart.tableLabel || null,
         notes: cart.notes || null,
         discount: cart.discount,
-        cashier_id: cart.cashierId,
-        cashier_name: cart.cashierName,
         payment_method: method,
         amount_received: method === 'cash' ? receivedNum : grandTotal,
       });

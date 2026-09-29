@@ -1244,3 +1244,519 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* Profit / costing */
+.pos-grid-stats.four {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.pos-neg {
+  color: var(--pos-err);
+}
+
+.pos-pos {
+  color: var(--pos-ok);
+}
+
+.pos-margin {
+  display: inline-flex;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.pos-stat strong .pos-margin {
+  font-size: inherit;
+}
+
+.pos-margin.good {
+  color: var(--pos-ok);
+}
+
+.pos-margin.mid {
+  color: var(--pos-warn);
+}
+
+.pos-margin.low {
+  color: var(--pos-err);
+}
+
+.pos-costing-title {
+  margin: 0.25rem 0 0.5rem;
+  font-size: 0.9rem;
+}
+
+.pos-recipe {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 0.6rem;
+}
+
+.pos-recipe-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 150px 96px 44px;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.pos-recipe-qty {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.pos-recipe-qty span {
+  min-width: 2.2rem;
+  color: var(--pos-muted);
+  font-size: 0.85rem;
+}
+
+.pos-recipe-cost {
+  text-align: right;
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--pos-muted);
+}
+
+.pos-recipe-remove {
+  padding-inline: 0;
+  min-width: 44px;
+}
+
+.pos-recipe-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 1rem;
+}
+
+.pos-recipe-toolbar .pos-input {
+  flex: 1 1 200px;
+  max-width: 320px;
+}
+
+.pos-segment {
+  display: inline-flex;
+  padding: 4px;
+  border-radius: 999px;
+  background: #fff;
+  border: 1px solid var(--pos-line);
+}
+
+.pos-segment button {
+  min-height: 40px;
+  padding: 0 1.1rem;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  font-weight: 700;
+  color: var(--pos-muted);
+  cursor: pointer;
+}
+
+.pos-segment button span {
+  margin-left: 0.3rem;
+  font-weight: 600;
+  opacity: 0.7;
+}
+
+.pos-segment button.active {
+  background: var(--pos-red);
+  color: #fff;
+}
+
+.pos-recipe-group {
+  margin-bottom: 1.2rem;
+}
+
+.pos-recipe-group h2 {
+  margin: 0 0 0.6rem;
+  font-size: 1rem;
+}
+
+.pos-recipe-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 0.75rem;
+}
+
+.pos-recipe-card header {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.65rem;
+  margin-bottom: 0.65rem;
+}
+
+.pos-recipe-card header img,
+.pos-recipe-noimg {
+  width: 52px;
+  height: 52px;
+  border-radius: 12px;
+  object-fit: cover;
+  background: var(--pos-red-soft);
+}
+
+.pos-recipe-card header strong {
+  display: block;
+}
+
+.pos-recipe-ingredients {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: 0.88rem;
+}
+
+.pos-recipe-ingredients li {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.35rem 0;
+  border-bottom: 1px dashed var(--pos-line);
+}
+
+.pos-recipe-steps {
+  margin: 0.7rem 0 0;
+  padding-left: 1.2rem;
+  font-size: 0.86rem;
+  color: var(--pos-muted);
+}
+
+.pos-recipe-steps li + li {
+  margin-top: 0.2rem;
+}
+
+/* Reports */
+.pos-report-tabs {
+  margin-bottom: 0.85rem;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.pos-report-bar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.85rem;
+}
+
+.pos-period-label {
+  min-width: 9rem;
+  text-align: center;
+}
+
+.pos-card-title {
+  margin: 0 0 0.6rem;
+  font-size: 1.05rem;
+}
+
+.pos-stat-sub {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.3rem;
+  color: var(--pos-muted);
+  font-size: 0.8rem;
+}
+
+.pos-change {
+  font-weight: 700;
+  font-size: 0.8rem;
+}
+
+.pos-change.up {
+  color: var(--pos-ok);
+}
+
+.pos-change.down {
+  color: var(--pos-err);
+}
+
+.pos-verdict {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 0.9rem 1.1rem;
+  margin-bottom: 0.85rem;
+  border-radius: var(--pos-radius);
+  border: 1px solid transparent;
+}
+
+.pos-verdict.ok {
+  background: rgba(46, 125, 50, 0.08);
+  border-color: rgba(46, 125, 50, 0.25);
+}
+
+.pos-verdict.bad {
+  background: rgba(183, 28, 28, 0.07);
+  border-color: rgba(183, 28, 28, 0.25);
+}
+
+.pos-verdict-icon {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  flex: none;
+  border-radius: 50%;
+  color: #fff;
+  font-weight: 800;
+  font-size: 1.2rem;
+}
+
+.pos-verdict.ok .pos-verdict-icon {
+  background: var(--pos-ok);
+}
+
+.pos-verdict.bad .pos-verdict-icon {
+  background: var(--pos-err);
+}
+
+.pos-verdict > div {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+.pos-verdict strong {
+  font-size: 1.1rem;
+}
+
+.pos-verdict span {
+  color: var(--pos-muted);
+  font-size: 0.9rem;
+}
+
+.pos-chart {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.pos-chart svg {
+  display: block;
+  width: 100%;
+  min-width: 520px;
+  height: auto;
+}
+
+.pos-chart-grid {
+  stroke: var(--pos-line);
+  stroke-dasharray: 3 4;
+}
+
+.pos-chart-zero {
+  stroke: var(--pos-muted);
+}
+
+.pos-chart-axis {
+  fill: var(--pos-muted);
+  font-size: 11px;
+}
+
+.pos-chart-sales {
+  fill: #f3c9c5;
+  background: #f3c9c5;
+}
+
+.pos-chart-profit {
+  fill: var(--pos-ok);
+  background: var(--pos-ok);
+}
+
+.pos-chart-loss {
+  fill: var(--pos-err);
+  background: var(--pos-err);
+}
+
+.pos-chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-top: 0.4rem;
+  font-size: 0.8rem;
+  color: var(--pos-muted);
+}
+
+.pos-chart-legend i {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 0.3rem;
+  border-radius: 3px;
+  vertical-align: -1px;
+}
+
+.pos-barlist {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.pos-barlist li {
+  display: grid;
+  grid-template-columns: 3.2rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.85rem;
+}
+
+.pos-barlist-label {
+  color: var(--pos-muted);
+  font-weight: 600;
+}
+
+.pos-barlist-track {
+  height: 12px;
+  border-radius: 999px;
+  background: #f1f3f6;
+  overflow: hidden;
+}
+
+.pos-barlist-fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--pos-red);
+}
+
+.pos-barlist-value {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.pos-insights {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.pos-insights li {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.65rem 0.8rem;
+  border-radius: 12px;
+  border-left: 4px solid var(--pos-line);
+  background: #f8f9fb;
+  font-size: 0.88rem;
+}
+
+.pos-insights li span {
+  color: var(--pos-muted);
+}
+
+.pos-insights li.bad {
+  border-left-color: var(--pos-err);
+  background: rgba(183, 28, 28, 0.05);
+}
+
+.pos-insights li.warn {
+  border-left-color: var(--pos-warn);
+  background: rgba(239, 108, 0, 0.06);
+}
+
+.pos-insights li.good {
+  border-left-color: var(--pos-ok);
+  background: rgba(46, 125, 50, 0.06);
+}
+
+.pos-insights li.info {
+  border-left-color: #1e66d0;
+  background: rgba(30, 102, 208, 0.05);
+}
+
+.pos-day-nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.pos-day-nav .pos-input {
+  width: auto;
+}
+
+.pos-pnl {
+  display: flex;
+  flex-direction: column;
+}
+
+.pos-pnl > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.6rem 0;
+  border-bottom: 1px solid var(--pos-line);
+  font-variant-numeric: tabular-nums;
+}
+
+.pos-pnl small {
+  margin-left: 0.35rem;
+  color: var(--pos-muted);
+  font-weight: 600;
+}
+
+.pos-pnl .minus {
+  color: var(--pos-muted);
+}
+
+.pos-pnl .subtotal {
+  font-weight: 700;
+}
+
+.pos-pnl .total {
+  border-bottom: none;
+  border-top: 2px solid var(--pos-ink);
+  font-size: 1.1rem;
+  font-weight: 800;
+}
+
+@media (max-width: 980px) {
+  .pos-grid-stats.four {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .pos-grid-stats.four > :first-child {
+    grid-column: auto;
+  }
+
+  .pos-recipe-row {
+    grid-template-columns: minmax(0, 1fr) 44px;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--pos-line);
+  }
+
+  .pos-recipe-row .pos-select {
+    grid-column: 1 / -1;
+  }
+
+  .pos-recipe-remove {
+    grid-row: 2;
+    grid-column: 2;
+  }
+
+  .pos-recipe-qty {
+    grid-row: 2;
+    grid-column: 1;
+  }
+
+  .pos-recipe-cost {
+    grid-row: 3;
+    grid-column: 1 / -1;
+    text-align: left;
+  }
+}

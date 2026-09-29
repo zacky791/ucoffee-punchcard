@@ -12,7 +12,6 @@ function formatReceiptText(order, settings = {}) {
   rows.push(`Receipt: ${order.receipt_number || '-'}`);
   rows.push(`Order:   ${order.order_number}`);
   rows.push(`Date:    ${formatDate(order.paid_at || order.created_at || new Date())}`);
-  rows.push(`Cashier: ${order.cashier_name || '-'}`);
   rows.push(`Type:    ${order.order_type || '-'}`);
   if (order.table_label) rows.push(`Table:   ${order.table_label}`);
   rows.push(line());

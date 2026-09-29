@@ -142,7 +142,6 @@ export default function OrdersPage() {
                 <tr key={o.id}>
                   <td className="pos-cell-title">
                     <strong>{o.order_number}</strong>
-                    <div className="pos-product-meta">{o.cashier_name}</div>
                   </td>
                   <td data-label="Time">{new Date(o.created_at).toLocaleString()}</td>
                   <td data-label="Type">{o.order_type}</td>
@@ -202,7 +201,7 @@ function OrderDetailModal({ order, currency, onClose, onUpdated, onError }) {
   }
 
   async function cancel() {
-    if (!window.confirm('Cancel this order?')) return;
+    if (!window.confirm('Cancel this order? Ingredients used will go back into inventory.')) return;
     setBusy(true);
     try {
       await api.posCancelOrder(order.id, { reason: 'Cancelled from Orders page' });

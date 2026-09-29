@@ -21,12 +21,6 @@ function reducer(state, action) {
       return { ...state, notes: action.notes };
     case 'set_discount':
       return { ...state, discount: money(action.discount) };
-    case 'set_cashier':
-      return {
-        ...state,
-        cashierId: action.cashierId,
-        cashierName: action.cashierName,
-      };
     case 'add_item': {
       const item = action.item;
       const key = [
@@ -118,8 +112,6 @@ const initial = {
   tableLabel: '',
   notes: '',
   discount: 0,
-  cashierId: null,
-  cashierName: 'Cashier',
   items: [],
 };
 
@@ -140,8 +132,6 @@ export function CartProvider({ children }) {
       setTable: (tableLabel) => dispatch({ type: 'set_table', tableLabel }),
       setNotes: (notes) => dispatch({ type: 'set_notes', notes }),
       setDiscount: (discount) => dispatch({ type: 'set_discount', discount }),
-      setCashier: (cashierId, cashierName) =>
-        dispatch({ type: 'set_cashier', cashierId, cashierName }),
       addItem: (item) => dispatch({ type: 'add_item', item }),
       setQty: (key, quantity) => dispatch({ type: 'set_qty', key, quantity }),
       removeItem: (key) => dispatch({ type: 'remove_item', key }),

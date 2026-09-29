@@ -37,6 +37,19 @@ export function weekPunchRange(weekStart) {
 }
 
 /**
+ * One business day (6 AM → 6 AM next day). `punchTo` extends past the day so a
+ * shift that started that day can still find its clock-out.
+ */
+export function businessDayRange(dateKey) {
+  const from = parseDateKey(dateKey);
+  from.setHours(BUSINESS_DAY_CUTOFF_HOUR, 0, 0, 0);
+  const to = new Date(from);
+  to.setDate(to.getDate() + 1);
+  const punchTo = new Date(to.getTime() + MAX_SHIFT_MS);
+  return { from: from.toISOString(), to: to.toISOString(), punchTo: punchTo.toISOString() };
+}
+
+/**
  * Pair punches into shifts. Each shift: { staff_id, in, out, ms, business_date, status }
  * status: 'closed' | 'open' (still working) | 'missed_out' | 'orphan_out' (out with no in)
  */
