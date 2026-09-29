@@ -149,7 +149,9 @@ export default function OrdersPage() {
                   <td data-label="Status">
                     <span className={`pos-status ${o.status}`}>{o.status}</span>
                   </td>
-                  <td data-label="Payment">{o.payment?.method || '—'}</td>
+                  <td data-label="Payment">
+                    {o.payment?.method === 'qr' ? 'QR' : o.payment?.method || '—'}
+                  </td>
                   <td data-label="Total">{formatMoney(o.grand_total, currency)}</td>
                   <td className="pos-cell-action">
                     <button
@@ -184,7 +186,7 @@ export default function OrdersPage() {
   );
 }
 
-function OrderDetailModal({ order, currency, onClose, onUpdated, onError }) {
+export function OrderDetailModal({ order, currency, onClose, onUpdated, onError }) {
   const [busy, setBusy] = useState(false);
 
   async function reprint() {
@@ -282,7 +284,7 @@ function OrderDetailModal({ order, currency, onClose, onUpdated, onError }) {
             <>
               <div>
                 <span>Paid via</span>
-                <span>{order.payment.method}</span>
+                <span>{order.payment.method === 'qr' ? 'QR' : order.payment.method}</span>
               </div>
               <div>
                 <span>Received / change</span>

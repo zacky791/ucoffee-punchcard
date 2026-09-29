@@ -11,6 +11,30 @@ function lineUnitPrice(base, modifiers = []) {
   return money(Number(base || 0) + delta);
 }
 
+function itemKey(item) {
+  return [
+    item.product_id,
+    JSON.stringify(item.modifiers || []),
+    item.notes || '',
+    item.temp || '',
+  ].join('|');
+}
+
+/** Checkout payload: Hot/Cold travels as a free modifier so it shows on receipts and order details. */
+export function itemsForCheckout(items) {
+  return items.map(({ temp, ...item }) =>
+    temp
+      ? {
+          ...item,
+          modifiers: [
+            { name: temp === 'hot' ? 'Hot' : 'Cold', price_delta: 0 },
+            ...(item.modifiers || []),
+          ],
+        }
+      : item
+  );
+}
+
 function reducer(state, action) {
   switch (action.type) {
     case 'set_order_type':
@@ -21,13 +45,29 @@ function reducer(state, action) {
       return { ...state, notes: action.notes };
     case 'set_discount':
       return { ...state, discount: money(action.discount) };
+    case 'set_temp': {
+      const target = state.items.find((i) => i.key === action.key);
+      if (!target || target.temp === action.temp) return state;
+      const updated = { ...target, temp: action.temp, key: itemKey({ ...target, temp: action.temp }) };
+      const twin = state.items.find((i) => i.key === updated.key);
+      if (!twin) {
+        return { ...state, items: state.items.map((i) => (i.key === action.key ? updated : i)) };
+      }
+      const quantity = twin.quantity + target.quantity;
+      return {
+        ...state,
+        items: state.items
+          .filter((i) => i.key !== action.key)
+          .map((i) =>
+            i.key === twin.key
+              ? { ...i, quantity, line_total: money(lineUnitPrice(i.base_price, i.modifiers) * quantity) }
+              : i
+          ),
+      };
+    }
     case 'add_item': {
-      const item = action.item;
-      const key = [
-        item.product_id,
-        JSON.stringify(item.modifiers || []),
-        item.notes || '',
-      ].join('|');
+      const item = { ...action.item, temp: action.item.temp || null };
+      const key = itemKey(item);
       const existing = state.items.find((i) => i.key === key);
       if (existing) {
         return {
@@ -60,6 +100,7 @@ function reducer(state, action) {
             base_price: money(item.base_price),
             modifiers: item.modifiers || [],
             notes: item.notes || '',
+            temp: item.temp,
             quantity,
             unit_price: unit,
             line_total: money(unit * quantity),
@@ -135,6 +176,7 @@ export function CartProvider({ children }) {
       addItem: (item) => dispatch({ type: 'add_item', item }),
       setQty: (key, quantity) => dispatch({ type: 'set_qty', key, quantity }),
       removeItem: (key) => dispatch({ type: 'remove_item', key }),
+      setTemp: (key, temp) => dispatch({ type: 'set_temp', key, temp }),
       clear: () => dispatch({ type: 'clear' }),
     }),
     [state, totals]

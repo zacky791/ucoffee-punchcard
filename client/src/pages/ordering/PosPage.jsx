@@ -1,8 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api } from '../../api';
-import { formatMoney, useCart } from '../../context/CartContext';
+import { formatMoney, itemsForCheckout, useCart } from '../../context/CartContext';
 import PrinterConnectButton from '../../components/PrinterConnectButton';
 import { printFromResult } from '../../lib/receiptPrinter';
+import { kindOf } from '../../lib/menuKind';
+
+function defaultTemp(product) {
+  return kindOf(product) === 'drink' ? 'cold' : null;
+}
 
 function nowLabel() {
   return new Date().toLocaleString(undefined, {
@@ -30,7 +35,19 @@ export default function PosPage() {
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [success, setSuccess] = useState(null);
   const [cartOpen, setCartOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
   const itemCount = cart.items.reduce((n, item) => n + Number(item.quantity || 0), 0);
+  const extras = [
+    cart.orderType === 'dine_in' && cart.tableLabel ? `Table ${cart.tableLabel}` : null,
+    cart.notes?.trim() ? 'Note' : null,
+    Number(cart.discount) > 0 ? `−${Number(cart.discount).toFixed(2)}` : null,
+  ].filter(Boolean);
+
+  function clearCart() {
+    if (!window.confirm(`Remove all ${itemCount} item(s) from this order?`)) return;
+    cart.clear();
+    setMoreOpen(false);
+  }
 
   useEffect(() => {
     const t = setInterval(() => setClock(nowLabel()), 30000);
@@ -100,6 +117,7 @@ export default function PosPage() {
       sku: product.sku,
       base_price: product.base_price,
       modifiers: [],
+      temp: defaultTemp(product),
     });
   }
 
@@ -222,6 +240,11 @@ export default function PosPage() {
         <aside className={`pos-cart ${cartOpen ? 'open' : ''}`} aria-label="Current order">
           <div className="pos-cart-head">
             <h2>Current order</h2>
+            {cart.items.length > 0 && (
+              <button type="button" className="pos-cart-clear" onClick={clearCart}>
+                Clear all
+              </button>
+            )}
             <button
               type="button"
               className="pos-cart-close"
@@ -247,21 +270,6 @@ export default function PosPage() {
               </button>
             ))}
           </div>
-
-          {cart.orderType === 'dine_in' && (
-            <select
-              className="pos-select"
-              value={cart.tableLabel}
-              onChange={(e) => cart.setTable(e.target.value)}
-            >
-              <option value="">Table (optional)</option>
-              {tables.map((t) => (
-                <option key={t.id} value={t.label}>
-                  {t.label}
-                </option>
-              ))}
-            </select>
-          )}
 
           <div className="pos-cart-items">
             {cart.items.length === 0 ? (
@@ -297,46 +305,108 @@ export default function PosPage() {
                     >
                       +
                     </button>
-                    <button
-                      type="button"
-                      className="pos-btn danger"
-                      style={{ marginLeft: 'auto', padding: '0.35rem 0.55rem' }}
-                      onClick={() => cart.removeItem(item.key)}
-                    >
-                      Remove
-                    </button>
+                    <div className="pos-line-actions">
+                      {item.temp && (
+                        <div className="pos-temp" role="group" aria-label="Temperature">
+                          {[
+                            ['hot', 'Hot'],
+                            ['cold', 'Cold'],
+                          ].map(([value, label]) => (
+                            <button
+                              key={value}
+                              type="button"
+                              className={`${value} ${item.temp === value ? 'active' : ''}`}
+                              aria-pressed={item.temp === value}
+                              onClick={() => cart.setTemp(item.key, value)}
+                            >
+                              {label}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      <button
+                        type="button"
+                        className="pos-trash"
+                        aria-label={`Remove ${item.product_name}`}
+                        title="Remove"
+                        onClick={() => cart.removeItem(item.key)}
+                      >
+                        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                          <path
+                            d="M4 7h16M10 11v6M14 11v6M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2l1-12M9 7V4h6v3"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                        </svg>
+                      </button>
+                    </div>
                   </div>
                 </div>
               ))
             )}
           </div>
 
-          <label className="pos-field">
-            <span style={{ fontSize: '0.8rem', color: 'var(--pos-muted)' }}>
-              Order notes
-            </span>
-            <textarea
-              className="pos-textarea"
-              rows={2}
-              value={cart.notes}
-              onChange={(e) => cart.setNotes(e.target.value)}
-              placeholder="Allergies, special requests…"
-            />
-          </label>
-
-          <label className="pos-field">
-            <span style={{ fontSize: '0.8rem', color: 'var(--pos-muted)' }}>
-              Discount ({currency})
-            </span>
-            <input
-              className="pos-input"
-              type="number"
-              min="0"
-              step="0.01"
-              value={cart.discount}
-              onChange={(e) => cart.setDiscount(e.target.value)}
-            />
-          </label>
+          <div className={`pos-cart-more ${moreOpen ? 'open' : ''}`}>
+            <button
+              type="button"
+              className="pos-cart-more-toggle"
+              aria-expanded={moreOpen}
+              onClick={() => setMoreOpen((v) => !v)}
+            >
+              <span>More options</span>
+              {!moreOpen && extras.length > 0 && (
+                <span className="pos-cart-more-summary">{extras.join(' · ')}</span>
+              )}
+              <span className="pos-cart-more-caret" aria-hidden="true">
+                ▾
+              </span>
+            </button>
+            {moreOpen && (
+              <div className="pos-cart-more-body">
+                {cart.orderType === 'dine_in' && (
+                  <label className="pos-field">
+                    <span className="pos-cart-label">Table</span>
+                    <select
+                      className="pos-select"
+                      value={cart.tableLabel}
+                      onChange={(e) => cart.setTable(e.target.value)}
+                    >
+                      <option value="">No table</option>
+                      {tables.map((t) => (
+                        <option key={t.id} value={t.label}>
+                          {t.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
+                <label className="pos-field">
+                  <span className="pos-cart-label">Order notes</span>
+                  <textarea
+                    className="pos-textarea"
+                    rows={2}
+                    value={cart.notes}
+                    onChange={(e) => cart.setNotes(e.target.value)}
+                    placeholder="Allergies, special requests…"
+                  />
+                </label>
+                <label className="pos-field">
+                  <span className="pos-cart-label">Discount ({currency})</span>
+                  <input
+                    className="pos-input"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={cart.discount}
+                    onChange={(e) => cart.setDiscount(e.target.value)}
+                  />
+                </label>
+              </div>
+            )}
+          </div>
 
           <div className="pos-totals">
             <div>
@@ -377,14 +447,6 @@ export default function PosPage() {
           >
             Checkout
           </button>
-          <button
-            type="button"
-            className="pos-btn ghost block"
-            disabled={!cart.items.length}
-            onClick={() => cart.clear()}
-          >
-            Clear cart
-          </button>
         </aside>
       </div>
 
@@ -402,7 +464,7 @@ export default function PosPage() {
           currency={currency}
           onClose={() => setModifierProduct(null)}
           onAdd={(payload) => {
-            cart.addItem(payload);
+            cart.addItem({ ...payload, temp: defaultTemp(modifierProduct) });
             setModifierProduct(null);
           }}
         />
@@ -412,12 +474,18 @@ export default function PosPage() {
         <CheckoutModal
           currency={currency}
           grandTotal={grandTotal}
-          methods={settings?.payment_methods || ['cash', 'card', 'ewallet', 'other']}
+          methods={[
+            'qr',
+            ...(settings?.payment_methods || ['cash', 'card', 'ewallet', 'other']).filter(
+              (m) => m !== 'qr'
+            ),
+          ]}
           cart={cart}
           onClose={() => setCheckoutOpen(false)}
           onPaid={async (result) => {
             setCheckoutOpen(false);
             cart.clear();
+            setMoreOpen(false);
             const printResult = result.hardware?.printResult;
             const printed = await printFromResult(printResult);
             const orderNumber = result.order?.order_number;
@@ -578,7 +646,7 @@ function CheckoutModal({ currency, grandTotal, methods, cart, onClose, onPaid })
     setBusy(true);
     try {
       const result = await api.posCheckout({
-        items: cart.items,
+        items: itemsForCheckout(cart.items),
         order_type: cart.orderType,
         table_label: cart.tableLabel || null,
         notes: cart.notes || null,
@@ -598,7 +666,11 @@ function CheckoutModal({ currency, grandTotal, methods, cart, onClose, onPaid })
     <div className="pos-modal-backdrop" onClick={busy ? undefined : onClose}>
       <div className="pos-modal" onClick={(e) => e.stopPropagation()}>
         <h2>Checkout</h2>
-        <p className="hint">Confirm payment · drawer & receipt via hardware provider</p>
+        <p className="hint">
+          {method === 'cash'
+            ? 'Cash · prints receipt and opens the drawer'
+            : 'Prints receipt · drawer stays closed'}
+        </p>
         {error && <div className="pos-alert error">{error}</div>}
 
         <div className="pos-totals" style={{ borderTop: 0, paddingTop: 0 }}>
@@ -618,7 +690,7 @@ function CheckoutModal({ currency, grandTotal, methods, cart, onClose, onPaid })
                 className={`pos-chip ${method === m ? 'active' : ''}`}
                 onClick={() => setMethod(m)}
               >
-                {m}
+                {m === 'qr' ? 'QR' : m}
               </button>
             ))}
           </div>

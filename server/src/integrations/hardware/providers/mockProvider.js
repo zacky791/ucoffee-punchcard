@@ -37,7 +37,7 @@ function formatReceiptText(order, settings = {}) {
   rows.push(line());
 
   const payment = order.payment || {};
-  rows.push(`Paid: ${payment.method || '-'}`);
+  rows.push(`Paid: ${payment.method === 'qr' ? 'QR' : payment.method || '-'}`);
   if (payment.amount_received != null) {
     rows.push(pair('Received', money(payment.amount_received), width));
     rows.push(pair('Change', money(payment.change_due || 0), width));

@@ -5,8 +5,8 @@ import { restorePrinter } from '../../lib/receiptPrinter';
 import '../../styles/ordering.css';
 
 const NAV = [
-  { to: '/ordering', end: true, label: 'Dashboard' },
   { to: '/ordering/pos', label: 'New Order' },
+  { to: '/ordering/dashboard', label: 'Dashboard' },
   { to: '/ordering/orders', label: 'Orders' },
   { to: '/ordering/products', label: 'Products' },
   { to: '/ordering/categories', label: 'Categories' },

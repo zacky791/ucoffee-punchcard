@@ -320,7 +320,7 @@ function DailyReport() {
                 <ul className="pos-list">
                   {Object.entries(report.payment_methods).map(([m, total]) => (
                     <li key={m}>
-                      <span style={{ textTransform: 'capitalize' }}>{m}</span>
+                      <span style={{ textTransform: 'capitalize' }}>{m === 'qr' ? 'QR' : m}</span>
                       <strong>{formatMoney(total, currency)}</strong>
                     </li>
                   ))}

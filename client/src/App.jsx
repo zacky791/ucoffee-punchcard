@@ -55,8 +55,9 @@ export default function App() {
           <Route path="/salary" element={<Performance />} />
           <Route path="/staff" element={<StaffAdmin />} />
           <Route path="/ordering" element={<OrderingLayout />}>
-            <Route index element={<DashboardPage />} />
+            <Route index element={<Navigate to="pos" replace />} />
             <Route path="pos" element={<PosPage />} />
+            <Route path="dashboard" element={<DashboardPage />} />
             <Route path="orders" element={<OrdersPage />} />
             <Route path="products" element={<ProductsPage />} />
             <Route path="categories" element={<CategoriesPage />} />

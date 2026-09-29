@@ -53,9 +53,13 @@ async function retryPrint(order, settings = {}) {
 }
 
 async function afterPayment(order, settings = {}) {
-  const printResult = await printReceipt(order, settings);
+  const isCash = String(order.payment?.method || '').toLowerCase() === 'cash';
+  const effective = isCash ? settings : { ...settings, cash_drawer_enabled: false };
+  const printResult = await printReceipt(order, effective);
   let drawerResult = { ok: true, skipped: true };
-  if (settings.cash_drawer_enabled !== false) {
+  if (!isCash) {
+    drawerResult = { ok: true, skipped: true, message: 'Drawer only opens for cash payments' };
+  } else if (settings.cash_drawer_enabled !== false) {
     drawerResult = await openCashDrawer(settings);
   }
   return { printResult, drawerResult };

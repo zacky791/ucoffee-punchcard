@@ -6,14 +6,7 @@ import IngredientRows, {
   toIngredientPayload,
   toIngredientRows,
 } from '../../components/IngredientRows';
-
-const DRINK_WORDS = /(coffee|matcha|tea|drink|juice|smoothie|latte|beverage|soda)/i;
-
-function kindOf(product) {
-  const cat = product.category;
-  if (cat?.kind === 'drink' || cat?.kind === 'food') return cat.kind;
-  return DRINK_WORDS.test(cat?.name || '') ? 'drink' : 'food';
-}
+import { kindOf } from '../../lib/menuKind';
 
 function formatQty(n) {
   return Number(n || 0).toLocaleString('en-MY', { maximumFractionDigits: 3 });

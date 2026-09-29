@@ -26,7 +26,7 @@ function createPosRouter(getSupabase) {
         service_charge_rate: 0,
         hardware_provider: 'mock',
         cash_drawer_enabled: true,
-        payment_methods: ['cash', 'card', 'ewallet', 'other'],
+        payment_methods: ['qr', 'cash', 'card', 'ewallet', 'other'],
         order_prefix: 'UC',
         next_order_seq: 1,
         receipt_width_mm: 80,
@@ -597,7 +597,7 @@ function createPosRouter(getSupabase) {
       const settings = await getSettings(db);
       const totals = calcTotals(items, body.discount, settings);
       const method = String(body.payment_method || 'cash').toLowerCase();
-      const allowed = settings.payment_methods || ['cash', 'card', 'ewallet', 'other'];
+      const allowed = ['qr', ...(settings.payment_methods || ['cash', 'card', 'ewallet', 'other'])];
       if (!allowed.includes(method)) {
         return res.status(400).json({ error: `Invalid payment method: ${method}` });
       }
