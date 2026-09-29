@@ -1,4 +1,4 @@
-import { NavLink, Navigate, Route, Routes } from 'react-router-dom';
+import { Link, NavLink, Navigate, Route, Routes } from 'react-router-dom';
 import PunchKiosk from './pages/PunchKiosk';
 import StaffAdmin from './pages/StaffAdmin';
 import Proof from './pages/Proof';
@@ -25,7 +25,7 @@ export default function App() {
     <div className="app-shell">
       <div className="atmosphere" aria-hidden="true" />
       <header className="top-bar">
-        <NavLink to="/" end className="nav-brand">
+        <Link to="/ordering/pos" className="nav-brand">
           <img
             className="brand-glyph"
             src="/favicon.png"
@@ -34,21 +34,20 @@ export default function App() {
             height={28}
           />
           <span>U Coffee</span>
-        </NavLink>
+        </Link>
         <nav className="nav-links" aria-label="Main">
-          <NavLink to="/" end>
-            Punch
-          </NavLink>
+          <NavLink to="/ordering">Ordering System</NavLink>
+          <NavLink to="/punch">Punch</NavLink>
           <NavLink to="/working-schedule">Working schedule</NavLink>
           <NavLink to="/planning">Planning</NavLink>
           <NavLink to="/salary">Salary table</NavLink>
           <NavLink to="/staff">Staff</NavLink>
-          <NavLink to="/ordering">Ordering System</NavLink>
         </nav>
       </header>
       <main className="app-main">
         <Routes>
-          <Route path="/" element={<PunchKiosk />} />
+          <Route path="/" element={<Navigate to="/ordering/pos" replace />} />
+          <Route path="/punch" element={<PunchKiosk />} />
           <Route path="/working-schedule" element={<WeekOverview />} />
           <Route path="/planning" element={<Schedule />} />
           <Route path="/proof" element={<Proof />} />
