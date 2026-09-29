@@ -11,6 +11,7 @@ import {
 } from '../../lib/performance';
 import { loadPunches, salaryByDate } from '../../lib/payroll';
 import { buildInsights } from '../../lib/reportInsights';
+import { categoryLabel, loadExpenses, overheadByDate } from '../../lib/overhead';
 import { BarList, ProfitChart } from '../../components/ReportCharts';
 
 const DAY_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -66,7 +67,9 @@ async function loadPeriod(period, anchor) {
   const { fromKey, toKey } = rangeFor(period, anchor);
   const prev = rangeFor(period, shiftAnchor(period, anchor, -1));
   const bucket = period === 'yearly' ? 'month' : 'day';
-  const [summary, prevSummary, people, menu, settings] = await Promise.all([
+  const todayKey = businessDateKey(new Date().toISOString());
+  const capped = (key) => (key < todayKey ? key : todayKey);
+  const [summary, prevSummary, people, menu, settings, ex] = await Promise.all([
     api.posSummaryReport({
       from: businessDayRange(fromKey).from,
       to: businessDayRange(toKey).to,
@@ -80,12 +83,16 @@ async function loadPeriod(period, anchor) {
     loadPunches(period === 'yearly' ? fromKey : prev.fromKey, toKey),
     api.posGetCosting().catch(() => []),
     api.posGetSettings(),
+    loadExpenses(),
   ]);
   return {
     fromKey,
     toKey,
     summary,
     prevSummary,
+    overhead: overheadByDate(ex.expenses, fromKey, capped(toKey)),
+    prevOverhead: overheadByDate(ex.expenses, prev.fromKey, capped(prev.toKey)),
+    expensesError: ex.error,
     salary: salaryByDate(people, fromKey, toKey),
     prevSalary: period === 'yearly' ? null : salaryByDate(people, prev.fromKey, prev.toKey),
     menu: menu || [],
@@ -130,10 +137,12 @@ export default function PeriodReport({ period }) {
 
   const view = useMemo(() => {
     if (!data) return null;
-    const { summary, prevSummary, salary, prevSalary, fromKey, toKey } = data;
+    const { summary, prevSummary, salary, prevSalary, overhead, prevOverhead, fromKey, toKey } = data;
     const t = summary.totals;
-    const net = round2(t.gross - salary.total);
-    const prevNet = prevSalary ? round2(prevSummary.totals.gross - prevSalary.total) : null;
+    const net = round2(t.gross - salary.total - overhead.total);
+    const prevNet = prevSalary
+      ? round2(prevSummary.totals.gross - prevSalary.total - prevOverhead.total)
+      : null;
 
     const byKey = Object.fromEntries(summary.buckets.map((b) => [b.key, b]));
     const chart = [];
@@ -141,9 +150,12 @@ export default function PeriodReport({ period }) {
       for (let m = 1; m <= 12; m += 1) {
         const key = `${anchor}-${String(m).padStart(2, '0')}`;
         const b = byKey[key] || { sales: 0, gross: 0, orders: 0 };
-        const pay = Object.entries(salary.byDate)
-          .filter(([d]) => d.startsWith(key))
-          .reduce((s, [, v]) => s + v, 0);
+        const sumMonth = (byDate) =>
+          Object.entries(byDate)
+            .filter(([d]) => d.startsWith(key))
+            .reduce((s, [, v]) => s + v, 0);
+        const pay = sumMonth(salary.byDate);
+        const oh = sumMonth(overhead.byDate);
         chart.push({
           key,
           short: MONTH_SHORT[m - 1],
@@ -151,7 +163,8 @@ export default function PeriodReport({ period }) {
           sales: b.sales,
           gross: b.gross,
           salary: round2(pay),
-          net: round2(b.gross - pay),
+          overhead: round2(oh),
+          net: round2(b.gross - pay - oh),
           orders: b.orders,
         });
       }
@@ -159,6 +172,7 @@ export default function PeriodReport({ period }) {
       for (let key = fromKey; key <= toKey; key = addDays(key, 1)) {
         const b = byKey[key] || { sales: 0, gross: 0, orders: 0 };
         const pay = salary.byDate[key] || 0;
+        const oh = overhead.byDate[key] || 0;
         const d = parseDateKey(key);
         chart.push({
           key,
@@ -167,19 +181,23 @@ export default function PeriodReport({ period }) {
           sales: b.sales,
           gross: b.gross,
           salary: pay,
-          net: round2(b.gross - pay),
+          overhead: oh,
+          net: round2(b.gross - pay - oh),
           orders: b.orders,
         });
       }
     }
 
-    const active = chart.filter((c) => c.sales > 0 || c.salary > 0);
+    const active = chart.filter((c) => c.sales > 0 || c.salary > 0 || c.overhead > 0);
     const best = [...active].sort((a, b) => b.net - a.net)[0];
     const worst = [...active].sort((a, b) => a.net - b.net)[0];
 
     const insights = buildInsights({
       totals: t,
       salary: salary.total,
+      overhead: overhead.total,
+      overheadByCategory: overhead.byCategory,
+      hasExpenses: !data.expensesError,
       previous: { sales: prevSummary.totals.sales, net: prevNet },
       products: summary.products,
       menu: data.menu,
@@ -271,10 +289,11 @@ export default function PeriodReport({ period }) {
               <small className="pos-stat-sub">{pct(view.t.margin)} margin</small>
             </div>
             <div className="pos-card pos-stat">
-              <span>Staff salary</span>
-              <strong>{formatMoney(data.salary.total, currency)}</strong>
+              <span>Salary + overheads</span>
+              <strong>{formatMoney(data.salary.total + data.overhead.total, currency)}</strong>
               <small className="pos-stat-sub">
-                {pct(share(data.salary.total, view.t.sales))} of sales · {data.salary.hours}h
+                Salary {formatMoney(data.salary.total, currency)} · Overheads{' '}
+                {formatMoney(data.overhead.total, currency)}
               </small>
             </div>
             <div className="pos-card pos-stat">
@@ -319,6 +338,20 @@ export default function PeriodReport({ period }) {
                   </span>
                   <span>− {formatMoney(data.salary.total, currency)}</span>
                 </div>
+                <div className="minus">
+                  <span>
+                    Overheads <small>{pct(share(data.overhead.total, view.t.sales))} of sales</small>
+                  </span>
+                  <span>− {formatMoney(data.overhead.total, currency)}</span>
+                </div>
+                {Object.entries(data.overhead.byCategory)
+                  .sort((a, b) => b[1] - a[1])
+                  .map(([cat, amount]) => (
+                    <div key={cat} className="minus sub">
+                      <span>{categoryLabel(cat)}</span>
+                      <span>{formatMoney(amount, currency)}</span>
+                    </div>
+                  ))}
                 <div className="total">
                   <span>
                     Net profit <small>{pct(share(view.net, view.t.sales))} margin</small>
@@ -360,6 +393,15 @@ export default function PeriodReport({ period }) {
                   </li>
                 )}
               </ul>
+              <p className="pos-meta" style={{ marginTop: '0.6rem' }}>
+                {data.expensesError
+                  ? 'Overheads not loaded. Run supabase/pos-overheads.sql, then add rent and bills in the Overheads tab.'
+                  : data.overhead.total === 0
+                    ? 'No overheads recorded. Add rent and bills in the Overheads tab for a true net profit.'
+                    : isCurrent
+                      ? 'Monthly overheads are spread evenly per day and counted up to today.'
+                      : 'Monthly overheads are spread evenly per day.'}
+              </p>
               {(data.salary.missed.length > 0 || data.salary.noRate.length > 0) && (
                 <p className="pos-meta" style={{ marginTop: '0.6rem' }}>
                   {data.salary.missed.length > 0 &&

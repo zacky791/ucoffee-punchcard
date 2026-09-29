@@ -1,10 +1,11 @@
 /**
  * Rule-based "where to improve" tips for a report period.
  * Benchmarks are common cafe targets: ingredient cost 25–35% of sales,
- * staff cost 25–35% of sales.
+ * staff cost 25–35% of sales, rent + utilities 20% or less.
  */
 export const COGS_TARGET = 35;
 export const LABOUR_TARGET = 35;
+export const OVERHEAD_TARGET = 20;
 
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
@@ -36,6 +37,9 @@ function hourLabel(h) {
 export function buildInsights({
   totals,
   salary,
+  overhead = 0,
+  overheadByCategory = {},
+  hasExpenses = true,
   previous,
   products = [],
   menu = [],
@@ -47,11 +51,19 @@ export function buildInsights({
   const tips = [];
   const sales = Number(totals.sales || 0);
   const gross = Number(totals.gross || 0);
-  const net = gross - salary;
+  const net = gross - salary - overhead;
   const grossMargin = share(gross, sales);
 
   if (!sales) {
     return [{ tone: 'warn', title: 'No sales yet', text: `No paid orders this ${periodName}.` }];
+  }
+
+  if (hasExpenses && overhead === 0) {
+    tips.push({
+      tone: 'warn',
+      title: 'No overheads recorded',
+      text: 'Rent, electricity and water are missing, so net profit looks better than reality. Add them in the Overheads tab.',
+    });
   }
 
   const unsetMenu = menu.filter((m) => m.active !== false && !Number(m.total_cost));
@@ -67,13 +79,24 @@ export function buildInsights({
   }
 
   if (net < 0) {
-    const breakEven = grossMargin > 0 ? salary / (grossMargin / 100) : null;
+    const fixed = salary + overhead;
+    const breakEven = grossMargin > 0 ? fixed / (grossMargin / 100) : null;
     tips.push({
       tone: 'bad',
       title: `Loss of ${rm(-net)}`,
       text: breakEven
-        ? `At your ${pct(grossMargin)} gross margin you need about ${rm(breakEven)} in sales to cover salary, which is ${rm(breakEven - sales)} more than you made.`
-        : 'Sales did not cover costs and salary.',
+        ? `At your ${pct(grossMargin)} gross margin you need about ${rm(breakEven)} in sales to cover salary and overheads, which is ${rm(breakEven - sales)} more than you made.`
+        : 'Sales did not cover costs, salary and overheads.',
+    });
+  }
+
+  const overheadShare = share(overhead, sales);
+  if (overhead > 0 && overheadShare > OVERHEAD_TARGET) {
+    const top = Object.entries(overheadByCategory).sort((a, b) => b[1] - a[1])[0];
+    tips.push({
+      tone: 'bad',
+      title: `Overheads are ${pct(overheadShare)} of sales`,
+      text: `Aim for 20% or less. Biggest is ${top ? `${top[0]} (${rm(top[1])})` : 'rent'}. Grow sales per day or check for savings (e.g. air-con timers, lights off after closing).`,
     });
   }
 

@@ -11,6 +11,7 @@ import {
   parseDateKey,
 } from '../../lib/performance';
 import { calcPayRm, hourlyRateRm } from '../../lib/salary';
+import { loadExpenses, overheadByDate } from '../../lib/overhead';
 import PeriodReport from './PeriodReport';
 
 function pct(value) {
@@ -62,6 +63,7 @@ function DailyReport() {
   const [date, setDate] = useState(today);
   const [report, setReport] = useState(null);
   const [people, setPeople] = useState({ punches: [], staff: [] });
+  const [expenses, setExpenses] = useState([]);
   const [currency, setCurrency] = useState('MYR');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -75,12 +77,14 @@ function DailyReport() {
       api.posProfitReport({ from: range.from, to: range.to }),
       api.getPerformance({ from: range.from, to: range.punchTo }),
       api.posGetSettings(),
+      loadExpenses(),
     ])
-      .then(([r, perf, settings]) => {
+      .then(([r, perf, settings, ex]) => {
         if (!alive) return;
         setReport(r);
         setPeople({ punches: perf.punches || [], staff: perf.staff || [] });
         setCurrency(settings?.currency || 'MYR');
+        setExpenses(ex.expenses);
       })
       .catch((err) => alive && setError(err.message))
       .finally(() => alive && setLoading(false));
@@ -115,7 +119,8 @@ function DailyReport() {
   const sales = Number(report?.sales || 0);
   const cost = Number(report?.cost || 0);
   const gross = Number(report?.profit || 0);
-  const net = Math.round((gross - salary.total) * 100) / 100;
+  const overhead = useMemo(() => overheadByDate(expenses, date, date), [expenses, date]);
+  const net = Math.round((gross - salary.total - overhead.total) * 100) / 100;
   const grossMargin = marginPct(gross, sales);
   const netMargin = marginPct(net, sales);
   const isToday = date === today;
@@ -183,7 +188,7 @@ function DailyReport() {
               <strong>{pct(grossMargin)}</strong>
             </div>
             <div className="pos-card pos-stat">
-              <span>Net profit (after salary)</span>
+              <span>Net profit (after salary &amp; overheads)</span>
               <strong className={net < 0 ? 'pos-neg' : 'pos-pos'}>{formatMoney(net, currency)}</strong>
             </div>
           </div>
@@ -210,6 +215,12 @@ function DailyReport() {
                   <span>Staff salary</span>
                   <span>− {formatMoney(salary.total, currency)}</span>
                 </div>
+                <div className="minus">
+                  <span>
+                    Overheads <small>daily share of rent, bills…</small>
+                  </span>
+                  <span>− {formatMoney(overhead.total, currency)}</span>
+                </div>
                 <div className="total">
                   <span>
                     Net profit <small>{pct(netMargin)} margin</small>
@@ -221,6 +232,11 @@ function DailyReport() {
                 <p className="pos-meta" style={{ marginTop: '0.75rem' }}>
                   {report.estimated_items} item(s) were sold before their cost was recorded, so
                   today&apos;s cost is used.
+                </p>
+              )}
+              {overhead.total === 0 && (
+                <p className="pos-meta" style={{ marginTop: '0.75rem' }}>
+                  No overheads recorded. Add rent and bills in the Overheads tab for a true net profit.
                 </p>
               )}
               {cost === 0 && sales > 0 && (

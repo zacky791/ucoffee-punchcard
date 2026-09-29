@@ -16,6 +16,7 @@ import InventoryPage from './pages/ordering/InventoryPage';
 import ReportsPage from './pages/ordering/ReportsPage';
 import ProfitPage from './pages/ordering/ProfitPage';
 import RecipePage from './pages/ordering/RecipePage';
+import OverheadsPage from './pages/ordering/OverheadsPage';
 import SettingsPage from './pages/ordering/SettingsPage';
 import './App.css';
 
@@ -63,6 +64,7 @@ export default function App() {
             <Route path="inventory" element={<InventoryPage />} />
             <Route path="recipe" element={<RecipePage />} />
             <Route path="profit" element={<ProfitPage />} />
+            <Route path="overheads" element={<OverheadsPage />} />
             <Route path="reports" element={<ReportsPage />} />
             <Route path="settings" element={<SettingsPage />} />
           </Route>

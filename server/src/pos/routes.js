@@ -138,10 +138,10 @@ function createPosRouter(getSupabase) {
   }
 
   function sendError(res, err) {
-    const missingColumn = err?.code === '42703' || err?.code === 'PGRST204';
+    const missingSchema = ['42703', 'PGRST204', 'PGRST205', '42P01'].includes(err?.code);
     res.status(err?.status || 500).json({
-      error: missingColumn
-        ? `${err.message}. Run supabase/pos-costing.sql and supabase/pos-recipe.sql in the Supabase SQL Editor.`
+      error: missingSchema
+        ? `${err.message}. Run supabase/pos-costing.sql, pos-recipe.sql and pos-overheads.sql in the Supabase SQL Editor.`
         : err?.message || 'Request failed',
     });
   }
@@ -534,7 +534,11 @@ function createPosRouter(getSupabase) {
 
       if (req.query.status) query = query.eq('status', req.query.status);
       if (req.query.q) query = query.ilike('order_number', `%${req.query.q}%`);
-      if (req.query.date) {
+      const from = req.query.from ? new Date(req.query.from) : null;
+      const to = req.query.to ? new Date(req.query.to) : null;
+      if (from && to && !Number.isNaN(from.getTime()) && !Number.isNaN(to.getTime())) {
+        query = query.gte('created_at', from.toISOString()).lt('created_at', to.toISOString());
+      } else if (req.query.date) {
         const start = new Date(`${req.query.date}T00:00:00`);
         const end = new Date(`${req.query.date}T23:59:59.999`);
         if (!Number.isNaN(start.getTime())) {
@@ -1005,6 +1009,95 @@ function createPosRouter(getSupabase) {
       res.json(data || []);
     } catch (err) {
       res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ——— Overheads (rent, utilities, ...) ———
+  const EXPENSE_CATEGORIES = ['rent', 'electricity', 'water', 'internet', 'gas', 'maintenance', 'marketing', 'other'];
+  const EXPENSE_KINDS = ['recurring', 'month', 'one_off'];
+  const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+  function expenseFields(body, partial) {
+    const out = {};
+    const bad = (msg) => Object.assign(new Error(msg), { status: 400 });
+    if (!partial || body.name !== undefined) {
+      const name = String(body.name || '').trim();
+      if (!name) throw bad('Name is required');
+      out.name = name.slice(0, 120);
+    }
+    if (!partial || body.category !== undefined) {
+      out.category = EXPENSE_CATEGORIES.includes(body.category) ? body.category : 'other';
+    }
+    if (!partial || body.kind !== undefined) {
+      if (!EXPENSE_KINDS.includes(body.kind)) throw bad('Invalid type');
+      out.kind = body.kind;
+    }
+    if (!partial || body.amount !== undefined) {
+      const amount = Number(body.amount);
+      if (!Number.isFinite(amount) || amount < 0) throw bad('Amount must be 0 or more');
+      out.amount = money(amount);
+    }
+    if (!partial || body.start_date !== undefined) {
+      if (!DATE_RE.test(String(body.start_date || ''))) throw bad('Start date is required');
+      out.start_date = body.start_date;
+    }
+    if (body.end_date !== undefined) {
+      if (body.end_date && !DATE_RE.test(String(body.end_date))) throw bad('Invalid end date');
+      out.end_date = body.end_date || null;
+    }
+    if (body.note !== undefined) out.note = String(body.note || '').slice(0, 300) || null;
+    return out;
+  }
+
+  router.get('/expenses', requireDb, async (req, res) => {
+    try {
+      const { data, error } = await req.supabase
+        .from('pos_expenses')
+        .select('*')
+        .order('start_date', { ascending: false });
+      if (error) throw error;
+      res.json(data || []);
+    } catch (err) {
+      sendError(res, err);
+    }
+  });
+
+  router.post('/expenses', requireDb, async (req, res) => {
+    try {
+      const { data, error } = await req.supabase
+        .from('pos_expenses')
+        .insert(expenseFields(req.body || {}, false))
+        .select('*')
+        .single();
+      if (error) throw error;
+      res.status(201).json(data);
+    } catch (err) {
+      sendError(res, err);
+    }
+  });
+
+  router.patch('/expenses/:id', requireDb, async (req, res) => {
+    try {
+      const { data, error } = await req.supabase
+        .from('pos_expenses')
+        .update(expenseFields(req.body || {}, true))
+        .eq('id', req.params.id)
+        .select('*')
+        .single();
+      if (error) throw error;
+      res.json(data);
+    } catch (err) {
+      sendError(res, err);
+    }
+  });
+
+  router.delete('/expenses/:id', requireDb, async (req, res) => {
+    try {
+      const { error } = await req.supabase.from('pos_expenses').delete().eq('id', req.params.id);
+      if (error) throw error;
+      res.json({ ok: true });
+    } catch (err) {
+      sendError(res, err);
     }
   });
 

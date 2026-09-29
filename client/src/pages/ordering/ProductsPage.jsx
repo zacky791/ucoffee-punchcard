@@ -156,13 +156,20 @@ export default function ProductsPage() {
                 onChange={(e) => setForm({ ...form, description: e.target.value })}
               />
             </label>
-            <label className="pos-field" style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <input
-                type="checkbox"
-                checked={form.active}
-                onChange={(e) => setForm({ ...form, active: e.target.checked })}
-              />
-              <span>Active</span>
+            <label className="pos-switch-row full">
+              <span>
+                <strong>Active</strong>
+                <small>Show this product on New Order</small>
+              </span>
+              <span className="pos-switch">
+                <input
+                  type="checkbox"
+                  role="switch"
+                  checked={form.active}
+                  onChange={(e) => setForm({ ...form, active: e.target.checked })}
+                />
+                <span className="pos-switch-track" aria-hidden="true" />
+              </span>
             </label>
             <div className="pos-field" style={{ justifyContent: 'end', flexDirection: 'row', gap: 8 }}>
               {editingId && (

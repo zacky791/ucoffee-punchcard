@@ -2,30 +2,29 @@ import { useEffect, useState } from 'react';
 import { api } from '../../api';
 import { formatMoney } from '../../context/CartContext';
 import { printFromResult } from '../../lib/receiptPrinter';
+import {
+  addDays,
+  businessDateKey,
+  businessDayRange,
+  parseDateKey,
+} from '../../lib/performance';
 
 export default function OrdersPage() {
+  const today = businessDateKey(new Date().toISOString());
   const [orders, setOrders] = useState([]);
   const [settings, setSettings] = useState(null);
-  const [q, setQ] = useState('');
-  const [status, setStatus] = useState('');
-  const [date, setDate] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState('');
+  const [date, setDate] = useState(today);
   const [selected, setSelected] = useState(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
 
-  async function load() {
+  async function load(day = date) {
     setLoading(true);
     setError('');
     try {
+      const range = businessDayRange(day);
       const [list, sett] = await Promise.all([
-        api.posGetOrders({
-          q: q || undefined,
-          status: status || undefined,
-          date: date || undefined,
-          payment_method: paymentMethod || undefined,
-          limit: 100,
-        }),
+        api.posGetOrders({ from: range.from, to: range.to, limit: 200 }),
         api.posGetSettings(),
       ]);
       setOrders(list || []);
@@ -38,11 +37,21 @@ export default function OrdersPage() {
   }
 
   useEffect(() => {
-    load();
+    load(date);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [date]);
 
   const currency = settings?.currency || 'MYR';
+  const isToday = date === today;
+  const dayLabel = parseDateKey(date).toLocaleDateString('en-GB', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
+  const dayTotal = orders
+    .filter((o) => o.status !== 'cancelled')
+    .reduce((s, o) => s + Number(o.grand_total || 0), 0);
 
   async function openDetail(id) {
     try {
@@ -58,62 +67,49 @@ export default function OrdersPage() {
       <div className="pos-page-head">
         <div>
           <h1>Orders</h1>
-          <p>Search, filter, reprint, and manage order status</p>
+          <p>Orders by day · reprint and manage status</p>
         </div>
       </div>
 
       {error && <div className="pos-alert error">{error}</div>}
 
-      <div className="pos-filters">
-        <input
-          className="pos-input"
-          placeholder="Order number"
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-        />
-        <input
-          className="pos-input"
-          type="date"
-          value={date}
-          onChange={(e) => setDate(e.target.value)}
-        />
-        <select
-          className="pos-select"
-          value={status}
-          onChange={(e) => setStatus(e.target.value)}
-        >
-          <option value="">All statuses</option>
-          {[
-            'draft',
-            'pending_payment',
-            'paid',
-            'preparing',
-            'ready',
-            'completed',
-            'cancelled',
-          ].map((s) => (
-            <option key={s} value={s}>
-              {s}
-            </option>
-          ))}
-        </select>
-        <select
-          className="pos-select"
-          value={paymentMethod}
-          onChange={(e) => setPaymentMethod(e.target.value)}
-        >
-          <option value="">All payments</option>
-          {(settings?.payment_methods || ['cash', 'card', 'ewallet', 'other']).map(
-            (m) => (
-              <option key={m} value={m}>
-                {m}
-              </option>
-            )
+      <div className="pos-report-bar">
+        <p className="pos-meta">
+          {dayLabel}
+          {!loading && ` · ${orders.length} order(s) · ${formatMoney(dayTotal, currency)}`}
+        </p>
+        <div className="pos-day-nav">
+          <button
+            type="button"
+            className="pos-btn ghost"
+            aria-label="Previous day"
+            onClick={() => setDate(addDays(date, -1))}
+          >
+            ←
+          </button>
+          <input
+            type="date"
+            className="pos-input"
+            value={date}
+            max={today}
+            onChange={(e) => e.target.value && setDate(e.target.value)}
+            aria-label="Order date"
+          />
+          <button
+            type="button"
+            className="pos-btn ghost"
+            aria-label="Next day"
+            disabled={isToday}
+            onClick={() => setDate(addDays(date, 1))}
+          >
+            →
+          </button>
+          {!isToday && (
+            <button type="button" className="pos-btn ghost" onClick={() => setDate(today)}>
+              Today
+            </button>
           )}
-        </select>
-        <button type="button" className="pos-btn primary" onClick={load}>
-          Apply
-        </button>
+        </div>
       </div>
 
       <div className="pos-card" style={{ overflowX: 'auto' }}>
@@ -135,7 +131,7 @@ export default function OrdersPage() {
             <tbody>
               {orders.length === 0 && (
                 <tr>
-                  <td colSpan={7}>No orders found</td>
+                  <td colSpan={7}>No orders on this day</td>
                 </tr>
               )}
               {orders.map((o) => (
@@ -143,7 +139,12 @@ export default function OrdersPage() {
                   <td className="pos-cell-title">
                     <strong>{o.order_number}</strong>
                   </td>
-                  <td data-label="Time">{new Date(o.created_at).toLocaleString()}</td>
+                  <td data-label="Time">
+                    {new Date(o.created_at).toLocaleTimeString([], {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
+                  </td>
                   <td data-label="Type">{o.order_type}</td>
                   <td data-label="Status">
                     <span className={`pos-status ${o.status}`}>{o.status}</span>

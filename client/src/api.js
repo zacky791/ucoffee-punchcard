@@ -607,6 +607,12 @@ export const api = {
       method: 'PUT',
       body: JSON.stringify(body),
     }),
+  posGetExpenses: () => request('/api/pos/expenses'),
+  posCreateExpense: (body) =>
+    request('/api/pos/expenses', { method: 'POST', body: JSON.stringify(body) }),
+  posUpdateExpense: (id, body) =>
+    request(`/api/pos/expenses/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  posDeleteExpense: (id) => request(`/api/pos/expenses/${id}`, { method: 'DELETE' }),
   posSummaryReport: (params = {}) => {
     const qs = new URLSearchParams(params).toString();
     return request(`/api/pos/reports/summary${qs ? `?${qs}` : ''}`);
