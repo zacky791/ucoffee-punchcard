@@ -736,7 +736,10 @@ function createPosRouter(getSupabase) {
         grand_total: 12,
         payment: { method: 'cash', amount_received: 20, change_due: 8 },
       };
-      const result = await hardware.printReceipt(sample, settings);
+      const result = await hardware.printReceipt(sample, {
+        ...settings,
+        cash_drawer_enabled: false,
+      });
       await logIntegration(req.supabase, {
         action: 'test_print',
         provider: settings.hardware_provider || 'mock',

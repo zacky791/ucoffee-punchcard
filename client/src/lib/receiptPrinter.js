@@ -118,18 +118,31 @@ export function disconnectPrinter() {
   notify();
 }
 
-function toEscPos(text) {
+// ESC p 0 25 250: pulse drawer pin 2. Only works if the printer has a drawer (RJ11/DK) port.
+const DRAWER_KICK = [0x1b, 0x70, 0x00, 0x19, 0xfa];
+
+function toEscPos(text, { openDrawer = false } = {}) {
   const ascii = String(text || '')
     .replace(/\r/g, '')
     .replace(/[^\x0A\x20-\x7E]/g, '?');
   const body = new TextEncoder().encode(ascii);
   const init = [0x1b, 0x40]; // ESC @ reset
   const feed = [0x0a, 0x0a, 0x0a, 0x0a];
-  const bytes = new Uint8Array(init.length + body.length + feed.length);
+  const kick = openDrawer ? DRAWER_KICK : [];
+  const bytes = new Uint8Array(init.length + kick.length + body.length + feed.length);
   bytes.set(init, 0);
-  bytes.set(body, init.length);
-  bytes.set(feed, init.length + body.length);
+  bytes.set(kick, init.length);
+  bytes.set(body, init.length + kick.length);
+  bytes.set(feed, init.length + kick.length + body.length);
   return bytes;
+}
+
+async function sendBytes(bytes) {
+  if (getPrintMode() === 'rawbt') {
+    printRawBT(bytes);
+    return;
+  }
+  await printBluetooth(bytes);
 }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -161,13 +174,13 @@ function printRawBT(bytes) {
 }
 
 /** Sends plain receipt text (already laid out to 32/42 columns) to the printer. */
-export async function printReceiptText(text) {
-  const bytes = toEscPos(text);
-  if (getPrintMode() === 'rawbt') {
-    printRawBT(bytes);
-    return;
-  }
-  await printBluetooth(bytes);
+export async function printReceiptText(text, options) {
+  await sendBytes(toEscPos(text, options));
+}
+
+/** Asks the printer to pulse its cash drawer port. */
+export async function kickDrawer() {
+  await sendBytes(new Uint8Array([0x1b, 0x40, ...DRAWER_KICK]));
 }
 
 /**
@@ -182,7 +195,9 @@ export async function printFromResult(printResult) {
     };
   }
   try {
-    await printReceiptText(printResult.receipt_text);
+    await printReceiptText(printResult.receipt_text, {
+      openDrawer: Boolean(printResult.open_drawer),
+    });
     const { mode, name } = getPrinterState();
     return {
       ok: true,

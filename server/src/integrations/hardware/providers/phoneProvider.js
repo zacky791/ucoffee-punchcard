@@ -15,6 +15,7 @@ async function printReceipt(order, settings = {}) {
     client_print: true,
     message: 'Receipt sent to cashier phone for printing',
     receipt_text: formatReceiptText(order, settings),
+    open_drawer: settings.cash_drawer_enabled !== false,
   };
 }
 
@@ -22,8 +23,8 @@ async function openCashDrawer() {
   return {
     ok: true,
     provider: 'phone',
-    skipped: true,
-    message: 'No cash drawer connected to the phone printer',
+    client_drawer: true,
+    message: 'Drawer command sent to cashier phone',
   };
 }
 

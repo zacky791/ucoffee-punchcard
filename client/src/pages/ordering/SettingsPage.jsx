@@ -1,10 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { api } from '../../api';
 import PrinterConnectButton from '../../components/PrinterConnectButton';
+import Toast from '../../components/Toast';
 import {
   checkPrinterConnection,
   disconnectPrinter,
   getPrinterState,
+  kickDrawer,
   printFromResult,
   setPrintMode,
   subscribePrinter,
@@ -12,7 +14,9 @@ import {
 
 export default function SettingsPage() {
   const [form, setForm] = useState(null);
-  const [message, setMessage] = useState('');
+  const [toast, setToast] = useState(null);
+  const clearToast = useCallback(() => setToast(null), []);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [hwStatus, setHwStatus] = useState(null);
   const [printer, setPrinter] = useState(getPrinterState);
@@ -36,14 +40,13 @@ export default function SettingsPage() {
   async function save(e) {
     e.preventDefault();
     setError('');
-    setMessage('');
+    setSaving(true);
     try {
       const saved = await api.posUpdateSettings({
         ...form,
         tax_rate: Number(form.tax_rate) || 0,
         service_charge_rate: Number(form.service_charge_rate) || 0,
         receipt_width_mm: Number(form.receipt_width_mm) || 80,
-        printer_port: form.printer_port ? Number(form.printer_port) : null,
         payment_methods: Array.isArray(form.payment_methods)
           ? form.payment_methods
           : String(form.payment_methods || '')
@@ -52,15 +55,16 @@ export default function SettingsPage() {
               .filter(Boolean),
       });
       setForm(saved);
-      setMessage('Settings saved');
+      setToast({ text: 'Settings saved' });
     } catch (err) {
-      setError(err.message);
+      setToast({ tone: 'error', text: `Save failed: ${err.message}` });
+    } finally {
+      setSaving(false);
     }
   }
 
   async function testConnection() {
     setError('');
-    setMessage('');
     setHwStatus(null);
     try {
       if (form.hardware_provider === 'phone') {
@@ -117,7 +121,6 @@ export default function SettingsPage() {
 
   async function testPrint() {
     setError('');
-    setMessage('');
     setHwStatus(null);
     try {
       const res = await api.posTestPrint();
@@ -160,13 +163,36 @@ export default function SettingsPage() {
 
   async function openDrawer() {
     setError('');
-    setMessage('');
+    setHwStatus(null);
     try {
       const res = await api.posOpenDrawer();
-      setMessage(res.message || 'Drawer command sent');
-      if (!res.ok) setError(res.message);
+      if (res.skipped) {
+        setHwStatus({
+          tone: 'warn',
+          title: 'Cash drawer is turned off',
+          detail: 'Turn on "Open cash drawer after payment" and tap Save settings first.',
+        });
+        return;
+      }
+      if (res.client_drawer) {
+        await kickDrawer();
+        const state = getPrinterState();
+        setHwStatus({
+          ok: true,
+          title: 'Drawer command sent',
+          detail: `Sent to ${
+            state.mode === 'rawbt' ? 'the RawBT app' : state.name || 'the printer'
+          }. The drawer only opens if its cable is plugged into the printer's drawer (RJ11) port.`,
+        });
+        return;
+      }
+      setHwStatus({
+        ok: Boolean(res.ok),
+        title: res.ok ? 'Drawer command sent' : 'Drawer failed',
+        detail: `Provider: ${res.provider || form.hardware_provider}. ${res.message || ''}`,
+      });
     } catch (err) {
-      setError(err.message);
+      setHwStatus({ ok: false, title: 'Drawer failed', detail: err.message });
     }
   }
 
@@ -193,7 +219,7 @@ export default function SettingsPage() {
       </div>
 
       {error && <div className="pos-alert error">{error}</div>}
-      {message && <div className="pos-alert ok">{message}</div>}
+      <Toast toast={toast} onDone={clearToast} />
 
       <form className="pos-card pos-form-grid" onSubmit={save}>
         <label className="pos-field">
@@ -322,36 +348,25 @@ export default function SettingsPage() {
             <option value="serial">Serial</option>
           </select>
         </label>
-        <label className="pos-field">
-          <span>Printer host</span>
-          <input
-            className="pos-input"
-            value={form.printer_host || ''}
-            onChange={(e) => set('printer_host', e.target.value)}
-            placeholder="192.168.1.50"
-          />
-        </label>
-        <label className="pos-field">
-          <span>Printer port</span>
-          <input
-            className="pos-input"
-            value={form.printer_port || ''}
-            onChange={(e) => set('printer_port', e.target.value)}
-            placeholder="9100"
-          />
-        </label>
-        <label className="pos-field" style={{ flexDirection: 'row', alignItems: 'center' }}>
-          <input
-            type="checkbox"
-            checked={form.cash_drawer_enabled !== false}
-            onChange={(e) => set('cash_drawer_enabled', e.target.checked)}
-          />
-          <span>Open cash drawer after payment</span>
+        <label className="pos-switch-row full">
+          <span>
+            <strong>Open cash drawer after payment</strong>
+            <small>Needs a drawer cable plugged into the printer's drawer port</small>
+          </span>
+          <span className="pos-switch">
+            <input
+              type="checkbox"
+              role="switch"
+              checked={form.cash_drawer_enabled !== false}
+              onChange={(e) => set('cash_drawer_enabled', e.target.checked)}
+            />
+            <span className="pos-switch-track" aria-hidden="true" />
+          </span>
         </label>
 
-        <div className="pos-field full" style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-          <button type="submit" className="pos-btn primary">
-            Save settings
+        <div className="pos-settings-actions full">
+          <button type="submit" className="pos-btn primary" disabled={saving}>
+            {saving ? 'Saving…' : 'Save settings'}
           </button>
           <button type="button" className="pos-btn ghost" onClick={testConnection}>
             Test connection
@@ -399,7 +414,7 @@ export default function SettingsPage() {
             </label>
             <div className="pos-field" style={{ justifyContent: 'flex-end' }}>
               <span>Status</span>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <div className="pos-printer-status">
                 <PrinterConnectButton onError={setError} />
                 {printer.mode === 'bluetooth' && printer.connected && (
                   <button type="button" className="pos-btn ghost" onClick={disconnectPrinter}>
@@ -417,19 +432,6 @@ export default function SettingsPage() {
           )}
         </div>
       )}
-
-      <div className="pos-card" style={{ marginTop: '0.85rem' }}>
-        <h2 style={{ marginTop: 0, fontSize: '1.05rem' }}>How hardware works</h2>
-        <p className="pos-meta" style={{ marginTop: 0 }}>
-          After payment, the API calls <code>HardwareIntegrationService</code>. With{' '}
-          <strong>Cashier phone</strong>, the server sends the receipt back and the phone
-          prints it over Bluetooth. Otherwise, use <strong>mock</strong> locally
-          (receipt text appears in the Node server console). For a remote API + USB
-          printer on the cashier PC, run a local bridge and set provider to{' '}
-          <strong>local_bridge</strong>. ESC/POS and cashier API need your real device /
-          vendor docs before they can send live commands.
-        </p>
-      </div>
     </div>
   );
 }

@@ -49,7 +49,7 @@ async function checkPrinterStatus(settings = {}) {
 }
 
 async function retryPrint(order, settings = {}) {
-  return printReceipt(order, settings);
+  return printReceipt(order, { ...settings, cash_drawer_enabled: false });
 }
 
 async function afterPayment(order, settings = {}) {
