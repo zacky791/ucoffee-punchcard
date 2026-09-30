@@ -828,6 +828,189 @@ html:has(.pos-modal-backdrop) body {
   font-size: 0.9rem;
 }
 
+/* Order details: ⋮ menu, PIN step, edit form */
+.pos-modal-title {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.pos-modal-title h2 {
+  margin: 0;
+}
+
+.pos-kebab {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.pos-kebab-btn {
+  width: 38px;
+  height: 38px;
+  min-height: 0;
+  padding: 0;
+  border-radius: 10px;
+  border: 1px solid var(--pos-line);
+  background: #fff;
+  color: var(--pos-ink, #1f2937);
+  font-size: 1.35rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.pos-kebab-btn:hover,
+.pos-kebab-btn[aria-expanded='true'] {
+  background: var(--pos-red-soft);
+}
+
+.pos-kebab-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 0.35rem);
+  z-index: 5;
+  min-width: 170px;
+  padding: 0.35rem;
+  background: #fff;
+  border: 1px solid var(--pos-line);
+  border-radius: 12px;
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.16);
+  display: flex;
+  flex-direction: column;
+}
+
+.pos-kebab-menu button {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  width: 100%;
+  min-height: 42px;
+  padding: 0.5rem 0.7rem;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.pos-kebab-menu button:hover {
+  background: #f3f4f6;
+}
+
+.pos-kebab-menu button.danger {
+  color: #dc2626;
+}
+
+.pos-pin {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin: 0.75rem 0;
+  padding: 0.85rem;
+  border: 1px solid var(--pos-line);
+  border-radius: 12px;
+  background: #f9fafb;
+}
+
+.pos-pin .pos-input {
+  font-size: 1.2rem;
+  letter-spacing: 0.3em;
+  text-align: center;
+}
+
+.pos-pin-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.pos-pin-actions .pos-btn {
+  flex: 1;
+}
+
+.pos-edit-items li {
+  align-items: center;
+}
+
+.pos-edit-items li.removed strong {
+  text-decoration: line-through;
+  color: var(--pos-muted);
+}
+
+.pos-edit-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-shrink: 0;
+}
+
+.pos-edit-undo {
+  min-height: 34px;
+  padding: 0 0.7rem;
+  border: 1px solid var(--pos-line);
+  border-radius: 8px;
+  background: #fff;
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.pos-edit-new {
+  display: inline-block;
+  padding: 0.05rem 0.45rem;
+  border-radius: 999px;
+  background: #dcfce7;
+  color: #15803d;
+  font-size: 0.7rem;
+  font-weight: 700;
+  vertical-align: middle;
+}
+
+.pos-edit-pick-list {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  max-height: 240px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.pos-edit-pick-list li + li {
+  border-top: 1px solid var(--pos-line);
+}
+
+.pos-edit-pick-list button {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  width: 100%;
+  min-height: 44px;
+  padding: 0.5rem 0.4rem;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.pos-edit-pick-list button:hover {
+  background: #f3f4f6;
+}
+
+.pos-edit-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem;
+  margin-top: 0.85rem;
+}
+
+.pos-edit-grid .full {
+  grid-column: 1 / -1;
+}
+
 /* Toast */
 .pos-toast {
   position: fixed;

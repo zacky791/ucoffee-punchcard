@@ -786,6 +786,196 @@ function createPosRouter(getSupabase) {
     }
   });
 
+  /** Puts back every stock change made for this order and removes those movement rows. */
+  async function undoOrderStock(db, orderId) {
+    const { data: moves, error } = await db
+      .from('pos_stock_movements')
+      .select('id, inventory_item_id, quantity')
+      .eq('order_id', orderId);
+    if (error) throw error;
+    if (!moves?.length) return;
+    const back = {};
+    for (const m of moves) {
+      back[m.inventory_item_id] = (back[m.inventory_item_id] || 0) - Number(m.quantity);
+    }
+    const ids = Object.keys(back).filter((id) => qty3(back[id]) !== 0);
+    if (ids.length) {
+      const { data: items, error: invErr } = await db
+        .from('pos_inventory_items')
+        .select('id, quantity')
+        .in('id', ids);
+      if (invErr) throw invErr;
+      for (const inv of items || []) {
+        const { error: upErr } = await db
+          .from('pos_inventory_items')
+          .update({ quantity: qty3(Number(inv.quantity) + back[inv.id]) })
+          .eq('id', inv.id);
+        if (upErr) throw upErr;
+      }
+    }
+    const { error: delErr } = await db
+      .from('pos_stock_movements')
+      .delete()
+      .in('id', moves.map((m) => m.id));
+    if (delErr) throw delErr;
+  }
+
+  router.patch('/orders/:id', requireDb, async (req, res) => {
+    const db = req.supabase;
+    try {
+      const body = req.body || {};
+      const bundle = await loadOrderBundle(db, req.params.id);
+      if (bundle.status === 'cancelled') {
+        return res.status(400).json({ error: 'Cancelled orders cannot be edited' });
+      }
+
+      const qtyById = new Map(
+        (Array.isArray(body.items) ? body.items : []).map((i) => [
+          i.id,
+          Math.max(0, Math.floor(Number(i.quantity) || 0)),
+        ])
+      );
+      const kept = [];
+      const removed = [];
+      for (const item of bundle.items) {
+        const quantity = qtyById.has(item.id) ? qtyById.get(item.id) : Number(item.quantity);
+        if (quantity <= 0) removed.push(item.id);
+        else kept.push({ ...item, quantity, line_total: money(Number(item.unit_price) * quantity) });
+      }
+
+      const addRequests = (Array.isArray(body.add) ? body.add : []).filter(
+        (a) => a?.product_id && Math.floor(Number(a.quantity) || 0) > 0
+      );
+      let added = [];
+      if (addRequests.length) {
+        const { data: products, error: prodErr } = await db
+          .from('pos_products')
+          .select('id, name, sku, base_price')
+          .in('id', [...new Set(addRequests.map((a) => a.product_id))]);
+        if (prodErr) throw prodErr;
+        const byId = new Map((products || []).map((p) => [p.id, p]));
+        added = normalizeItems(
+          addRequests
+            .filter((a) => byId.has(a.product_id))
+            .map((a) => {
+              const p = byId.get(a.product_id);
+              const modifiers = (Array.isArray(a.modifiers) ? a.modifiers : [])
+                .map((m) => ({ name: String(m?.name || '').slice(0, 60), price_delta: 0 }))
+                .filter((m) => m.name);
+              return {
+                product_id: p.id,
+                product_name: p.name,
+                sku: p.sku,
+                unit_price: Number(p.base_price) || 0,
+                quantity: Math.floor(Number(a.quantity)),
+                modifiers,
+              };
+            })
+        );
+      }
+
+      if (!kept.length && !added.length) {
+        return res.status(400).json({ error: 'An order needs at least one item. Delete the order instead.' });
+      }
+
+      const settings = await getSettings(db);
+      const discount = body.discount !== undefined ? body.discount : bundle.discount;
+      const totals = calcTotals([...kept, ...added], discount, settings);
+      const now = new Date().toISOString();
+
+      if (added.length) {
+        let costs = null;
+        try {
+          costs = await loadProductCosts(db, added.map((i) => i.product_id));
+        } catch (costErr) {
+          console.error('cost lookup failed', costErr.message);
+        }
+        const { error } = await db.from('pos_order_items').insert(
+          added.map((item) => ({
+            ...item,
+            order_id: bundle.id,
+            ...(costs && { unit_cost: costs[item.product_id]?.total_cost ?? null }),
+          }))
+        );
+        if (error) throw error;
+      }
+      if (removed.length) {
+        const { error } = await db.from('pos_order_items').delete().in('id', removed);
+        if (error) throw error;
+      }
+      for (const item of kept) {
+        const { error } = await db
+          .from('pos_order_items')
+          .update({ quantity: item.quantity, line_total: item.line_total })
+          .eq('id', item.id);
+        if (error) throw error;
+      }
+
+      const orderUpdates = { ...totals, updated_at: now };
+      if (['dine_in', 'takeaway', 'delivery'].includes(body.order_type)) {
+        orderUpdates.order_type = body.order_type;
+      }
+      if (body.table_label !== undefined) orderUpdates.table_label = body.table_label || null;
+      if (body.notes !== undefined) orderUpdates.notes = body.notes || null;
+      const { error: orderErr } = await db.from('pos_orders').update(orderUpdates).eq('id', bundle.id);
+      if (orderErr) throw orderErr;
+
+      if (bundle.payment) {
+        const allowed = ['qr', ...(settings.payment_methods || ['cash', 'card', 'ewallet', 'other'])];
+        const method = allowed.includes(String(body.payment_method || '').toLowerCase())
+          ? String(body.payment_method).toLowerCase()
+          : bundle.payment.method;
+        const received =
+          method === 'cash'
+            ? Math.max(Number(bundle.payment.amount_received) || 0, totals.grand_total)
+            : totals.grand_total;
+        const { error: payErr } = await db
+          .from('pos_payments')
+          .update({
+            method,
+            amount: totals.grand_total,
+            amount_received: received,
+            change_due: money(received - totals.grand_total),
+          })
+          .eq('id', bundle.payment.id);
+        if (payErr) throw payErr;
+      }
+
+      let inventoryWarning = null;
+      try {
+        await undoOrderStock(db, bundle.id);
+        await deductInventory(db, await loadOrderBundle(db, bundle.id));
+      } catch (invErr) {
+        inventoryWarning = invErr.message;
+        console.error('inventory re-sync failed', invErr);
+      }
+
+      res.json({ order: await loadOrderBundle(db, bundle.id), inventory_warning: inventoryWarning });
+    } catch (err) {
+      sendError(res, err);
+    }
+  });
+
+  router.delete('/orders/:id', requireDb, async (req, res) => {
+    const db = req.supabase;
+    try {
+      const { data: order, error } = await db
+        .from('pos_orders')
+        .select('id, order_number')
+        .eq('id', req.params.id)
+        .single();
+      if (error || !order) return res.status(404).json({ error: 'Order not found' });
+
+      await undoOrderStock(db, order.id);
+      await db.from('pos_integration_logs').delete().eq('order_id', order.id);
+      const { error: delErr } = await db.from('pos_orders').delete().eq('id', order.id);
+      if (delErr) throw delErr;
+      res.json({ ok: true, order_number: order.order_number });
+    } catch (err) {
+      sendError(res, err);
+    }
+  });
+
   router.post('/orders/:id/cancel', requireDb, async (req, res) => {
     try {
       const reason = String(req.body?.reason || '').slice(0, 200);

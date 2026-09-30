@@ -564,6 +564,9 @@ export const api = {
     return request(`/api/pos/orders${qs ? `?${qs}` : ''}`);
   },
   posGetOrder: (id) => request(`/api/pos/orders/${id}`),
+  posUpdateOrder: (id, body) =>
+    request(`/api/pos/orders/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  posDeleteOrder: (id) => request(`/api/pos/orders/${id}`, { method: 'DELETE' }),
   posCheckout: (body) =>
     request('/api/pos/orders/checkout', {
       method: 'POST',

@@ -243,6 +243,7 @@ export default function DashboardPage() {
             await loadToday();
             setSelected(await api.posGetOrder(selected.id));
           }}
+          onDeleted={loadToday}
           onError={setError}
         />
       )}
