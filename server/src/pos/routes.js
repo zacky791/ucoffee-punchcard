@@ -1291,6 +1291,173 @@ function createPosRouter(getSupabase) {
     }
   });
 
+  // ——— Daily expenses (purchases / restock) ———
+  function purchaseFields(body) {
+    const bad = (msg) => Object.assign(new Error(msg), { status: 400 });
+    if (!DATE_RE.test(String(body.purchase_date || ''))) throw bad('Date is required');
+    const amount = Number(body.amount);
+    if (!Number.isFinite(amount) || amount < 0) throw bad('Amount must be 0 or more');
+    const itemId = body.inventory_item_id || null;
+    const quantity = itemId ? qty3(body.quantity) : null;
+    if (itemId && !(quantity > 0)) throw bad('Enter how much you bought');
+    return {
+      purchase_date: body.purchase_date,
+      name: String(body.name || '').trim().slice(0, 120),
+      inventory_item_id: itemId,
+      quantity,
+      amount: money(amount),
+      note: String(body.note || '').slice(0, 300) || null,
+    };
+  }
+
+  async function changeStock(db, itemId, delta) {
+    const { data: item, error } = await db
+      .from('pos_inventory_items')
+      .select('id, name, quantity')
+      .eq('id', itemId)
+      .single();
+    if (error || !item) throw Object.assign(new Error('Inventory item not found'), { status: 400 });
+    const { error: upErr } = await db
+      .from('pos_inventory_items')
+      .update({ quantity: qty3(Number(item.quantity) + delta) })
+      .eq('id', item.id);
+    if (upErr) throw upErr;
+    return item;
+  }
+
+  async function addPurchaseStock(db, fields) {
+    if (!fields.inventory_item_id || !(fields.quantity > 0)) return null;
+    await changeStock(db, fields.inventory_item_id, fields.quantity);
+    const { data, error } = await db
+      .from('pos_stock_movements')
+      .insert({
+        inventory_item_id: fields.inventory_item_id,
+        type: 'in',
+        quantity: fields.quantity,
+        note: `Purchase: ${fields.name}`,
+      })
+      .select('id')
+      .single();
+    if (error) throw error;
+    return data.id;
+  }
+
+  async function removePurchaseStock(db, purchase) {
+    if (!purchase.stock_movement_id) return;
+    const { data: move } = await db
+      .from('pos_stock_movements')
+      .select('id, inventory_item_id, quantity')
+      .eq('id', purchase.stock_movement_id)
+      .maybeSingle();
+    if (!move) return;
+    await changeStock(db, move.inventory_item_id, -Number(move.quantity));
+    const { error } = await db.from('pos_stock_movements').delete().eq('id', move.id);
+    if (error) throw error;
+  }
+
+  async function withItemName(db, fields) {
+    if (fields.name || !fields.inventory_item_id) {
+      if (!fields.name) throw Object.assign(new Error('Name is required'), { status: 400 });
+      return fields;
+    }
+    const { data } = await db
+      .from('pos_inventory_items')
+      .select('name')
+      .eq('id', fields.inventory_item_id)
+      .maybeSingle();
+    return { ...fields, name: data?.name || 'Stock' };
+  }
+
+  const PURCHASE_SELECT = '*, item:pos_inventory_items(id, name, unit)';
+
+  router.get('/purchases', requireDb, async (req, res) => {
+    try {
+      let query = req.supabase
+        .from('pos_purchases')
+        .select(PURCHASE_SELECT)
+        .order('purchase_date', { ascending: false })
+        .order('created_at', { ascending: false });
+      if (DATE_RE.test(String(req.query.from || ''))) query = query.gte('purchase_date', req.query.from);
+      if (DATE_RE.test(String(req.query.to || ''))) query = query.lte('purchase_date', req.query.to);
+      const { data, error } = await query.limit(2000);
+      if (error) throw error;
+      res.json(data || []);
+    } catch (err) {
+      sendError(res, err);
+    }
+  });
+
+  router.post('/purchases', requireDb, async (req, res) => {
+    const db = req.supabase;
+    try {
+      const fields = await withItemName(db, purchaseFields(req.body || {}));
+      const stock_movement_id = await addPurchaseStock(db, fields);
+      const { data, error } = await db
+        .from('pos_purchases')
+        .insert({ ...fields, stock_movement_id })
+        .select(PURCHASE_SELECT)
+        .single();
+      if (error) throw error;
+      res.status(201).json(data);
+    } catch (err) {
+      sendError(res, err);
+    }
+  });
+
+  router.patch('/purchases/:id', requireDb, async (req, res) => {
+    const db = req.supabase;
+    try {
+      const { data: old, error: findErr } = await db
+        .from('pos_purchases')
+        .select('*')
+        .eq('id', req.params.id)
+        .single();
+      if (findErr || !old) return res.status(404).json({ error: 'Expense not found' });
+      const fields = await withItemName(db, purchaseFields(req.body || {}));
+      const stockChanged =
+        fields.inventory_item_id !== old.inventory_item_id ||
+        Number(fields.quantity || 0) !== Number(old.quantity || 0);
+      let stock_movement_id = old.stock_movement_id;
+      if (stockChanged) {
+        await removePurchaseStock(db, old);
+        stock_movement_id = await addPurchaseStock(db, fields);
+      } else if (old.stock_movement_id && fields.name !== old.name) {
+        await db
+          .from('pos_stock_movements')
+          .update({ note: `Purchase: ${fields.name}` })
+          .eq('id', old.stock_movement_id);
+      }
+      const { data, error } = await db
+        .from('pos_purchases')
+        .update({ ...fields, stock_movement_id })
+        .eq('id', old.id)
+        .select(PURCHASE_SELECT)
+        .single();
+      if (error) throw error;
+      res.json(data);
+    } catch (err) {
+      sendError(res, err);
+    }
+  });
+
+  router.delete('/purchases/:id', requireDb, async (req, res) => {
+    const db = req.supabase;
+    try {
+      const { data: old, error: findErr } = await db
+        .from('pos_purchases')
+        .select('*')
+        .eq('id', req.params.id)
+        .single();
+      if (findErr || !old) return res.status(404).json({ error: 'Expense not found' });
+      await removePurchaseStock(db, old);
+      const { error } = await db.from('pos_purchases').delete().eq('id', old.id);
+      if (error) throw error;
+      res.json({ ok: true });
+    } catch (err) {
+      sendError(res, err);
+    }
+  });
+
   // ——— Costing / profit margin ———
   router.get('/costing', requireDb, async (req, res) => {
     try {

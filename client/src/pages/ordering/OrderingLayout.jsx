@@ -11,6 +11,7 @@ const NAV = [
   { to: '/ordering/products', label: 'Products' },
   { to: '/ordering/categories', label: 'Categories' },
   { to: '/ordering/inventory', label: 'Inventory' },
+  { to: '/ordering/expenses', label: 'Expenses' },
   { to: '/ordering/recipe', label: 'Recipe' },
   { to: '/ordering/profit', label: 'Profit' },
   { to: '/ordering/overheads', label: 'Overheads' },

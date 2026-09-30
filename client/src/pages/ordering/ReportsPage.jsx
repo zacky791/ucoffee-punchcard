@@ -12,6 +12,8 @@ import {
 } from '../../lib/performance';
 import { calcPayRm, hourlyRateRm } from '../../lib/salary';
 import { loadExpenses, overheadByDate } from '../../lib/overhead';
+import { loadPurchaseTotal } from '../../lib/purchases';
+import ExpenseStats from '../../components/ExpenseStats';
 import PeriodReport from './PeriodReport';
 
 function pct(value) {
@@ -21,7 +23,6 @@ function pct(value) {
 function marginPct(amount, sales) {
   return sales > 0 ? Math.round((amount / sales) * 1000) / 10 : null;
 }
-
 const TABS = [
   ['daily', 'Daily'],
   ['weekly', 'Weekly'],
@@ -64,6 +65,7 @@ function DailyReport() {
   const [report, setReport] = useState(null);
   const [people, setPeople] = useState({ punches: [], staff: [] });
   const [expenses, setExpenses] = useState([]);
+  const [purchases, setPurchases] = useState(0);
   const [currency, setCurrency] = useState('MYR');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -78,13 +80,15 @@ function DailyReport() {
       api.getPerformance({ from: range.from, to: range.punchTo }),
       api.posGetSettings(),
       loadExpenses(),
+      loadPurchaseTotal(date, date),
     ])
-      .then(([r, perf, settings, ex]) => {
+      .then(([r, perf, settings, ex, bought]) => {
         if (!alive) return;
         setReport(r);
         setPeople({ punches: perf.punches || [], staff: perf.staff || [] });
         setCurrency(settings?.currency || 'MYR');
         setExpenses(ex.expenses);
+        setPurchases(bought);
       })
       .catch((err) => alive && setError(err.message))
       .finally(() => alive && setLoading(false));
@@ -174,11 +178,12 @@ function DailyReport() {
 
       {report && (
         <>
-          <div className="pos-grid-stats four">
+          <div className="pos-grid-stats six">
             <div className="pos-card pos-stat">
               <span>Sales</span>
               <strong>{formatMoney(sales, currency)}</strong>
             </div>
+            <ExpenseStats sales={sales} expenses={purchases} currency={currency} />
             <div className="pos-card pos-stat">
               <span>Gross profit</span>
               <strong className={gross < 0 ? 'pos-neg' : ''}>{formatMoney(gross, currency)}</strong>

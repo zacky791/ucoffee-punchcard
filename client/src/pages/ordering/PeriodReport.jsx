@@ -12,6 +12,8 @@ import {
 import { loadPunches, salaryByDate } from '../../lib/payroll';
 import { buildInsights } from '../../lib/reportInsights';
 import { categoryLabel, loadExpenses, overheadByDate } from '../../lib/overhead';
+import { loadPurchaseTotal } from '../../lib/purchases';
+import ExpenseStats from '../../components/ExpenseStats';
 import { BarList, ProfitChart } from '../../components/ReportCharts';
 
 const DAY_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -69,7 +71,7 @@ async function loadPeriod(period, anchor) {
   const bucket = period === 'yearly' ? 'month' : 'day';
   const todayKey = businessDateKey(new Date().toISOString());
   const capped = (key) => (key < todayKey ? key : todayKey);
-  const [summary, prevSummary, people, menu, settings, ex] = await Promise.all([
+  const [summary, prevSummary, people, menu, settings, ex, purchases] = await Promise.all([
     api.posSummaryReport({
       from: businessDayRange(fromKey).from,
       to: businessDayRange(toKey).to,
@@ -84,8 +86,10 @@ async function loadPeriod(period, anchor) {
     api.posGetCosting().catch(() => []),
     api.posGetSettings(),
     loadExpenses(),
+    loadPurchaseTotal(fromKey, capped(toKey)),
   ]);
   return {
+    purchases,
     fromKey,
     toKey,
     summary,
@@ -275,7 +279,7 @@ export default function PeriodReport({ period }) {
             <Change now={view.net} before={view.prevNet} />
           </div>
 
-          <div className="pos-grid-stats four">
+          <div className="pos-grid-stats six">
             <div className="pos-card pos-stat">
               <span>Sales</span>
               <strong>{formatMoney(view.t.sales, currency)}</strong>
@@ -283,6 +287,7 @@ export default function PeriodReport({ period }) {
                 {view.t.orders} orders <Change now={view.t.sales} before={data.prevSummary.totals.sales} />
               </small>
             </div>
+            <ExpenseStats sales={view.t.sales} expenses={data.purchases} currency={currency} />
             <div className="pos-card pos-stat">
               <span>Gross profit</span>
               <strong>{formatMoney(view.t.gross, currency)}</strong>
