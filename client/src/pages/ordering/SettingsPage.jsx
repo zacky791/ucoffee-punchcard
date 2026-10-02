@@ -92,9 +92,11 @@ export default function SettingsPage() {
           setHwStatus({
             ok: false,
             title: 'Bluetooth printer not connected',
-            detail: state.name
-              ? `Lost connection to ${state.name}. Check the printer is on and nearby, then tap Connect printer.`
-              : 'No printer paired in this session. Tap Connect printer and pick your printer.',
+            detail:
+              state.lastError?.message ||
+              (state.name
+                ? `Lost connection to ${state.name}. Check the printer is on and nearby, then tap Connect printer.`
+                : 'No printer paired in this session. Tap Connect printer and pick your printer.'),
           });
         }
         return;
@@ -142,18 +144,13 @@ export default function SettingsPage() {
         return;
       }
       const printed = await printFromResult(res);
-      const state = getPrinterState();
       setHwStatus({
         ok: printed.ok,
         title: printed.ok ? 'Test print sent' : 'Test print failed',
         detail: res.client_print
           ? printed.ok
             ? `${printed.message}. If nothing came out, check paper and that the printer is on.`
-            : `${printed.message}${
-                state.mode === 'bluetooth' && !state.connected
-                  ? ' (Bluetooth printer not connected.)'
-                  : ''
-              }`
+            : printed.message
           : `Provider: ${res.provider}. ${printed.message}`,
       });
     } catch (err) {
