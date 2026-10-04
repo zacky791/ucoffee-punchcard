@@ -4,6 +4,7 @@ import { formatMoney, itemsForCheckout, useCart } from '../../context/CartContex
 import PrinterConnectButton from '../../components/PrinterConnectButton';
 import { printFromResult } from '../../lib/receiptPrinter';
 import { kindOf } from '../../lib/menuKind';
+import { SURVEY_SOURCES, surveyErrorMessage } from '../../lib/survey';
 
 function defaultTemp(product) {
   return kindOf(product) === 'drink' ? 'cold' : null;
@@ -34,6 +35,7 @@ export default function PosPage() {
   const [modifierProduct, setModifierProduct] = useState(null);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [success, setSuccess] = useState(null);
+  const [surveyOrder, setSurveyOrder] = useState(null);
   const [cartOpen, setCartOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   const itemCount = cart.items.reduce((n, item) => n + Number(item.quantity || 0), 0);
@@ -486,9 +488,10 @@ export default function PosPage() {
             setCheckoutOpen(false);
             cart.clear();
             setMoreOpen(false);
+            const orderNumber = result.order?.order_number;
+            setSurveyOrder({ id: result.order?.id || null, number: orderNumber });
             const printResult = result.hardware?.printResult;
             const printed = await printFromResult(printResult);
-            const orderNumber = result.order?.order_number;
             setSuccess({
               orderId: result.order?.id,
               printOk: printed.ok,
@@ -504,6 +507,101 @@ export default function PosPage() {
           }}
         />
       )}
+
+      {surveyOrder && (
+        <SurveyModal order={surveyOrder} onDone={() => setSurveyOrder(null)} />
+      )}
+    </div>
+  );
+}
+
+function SurveyModal({ order, onDone }) {
+  const [otherOpen, setOtherOpen] = useState(false);
+  const [otherText, setOtherText] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  async function save(source) {
+    if (source === 'other' && !otherText.trim()) {
+      setError('Type where the customer heard about us, or tap Skip.');
+      return;
+    }
+    setBusy(true);
+    setError('');
+    try {
+      await api.posCreateSurvey({
+        order_id: order.id,
+        source,
+        other_text: source === 'other' ? otherText.trim() : null,
+      });
+      onDone();
+    } catch (err) {
+      setError(surveyErrorMessage(err));
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="pos-modal-backdrop">
+      <div className="pos-modal" role="dialog" aria-labelledby="survey-title">
+        <h2 id="survey-title">How did you hear about our shop?</h2>
+        <p className="hint">
+          {order.number ? `Order ${order.number} · ` : ''}Ask the customer and tap their answer.
+        </p>
+        {error && <div className="pos-alert error">{error}</div>}
+
+        <div className="pos-survey-options">
+          {SURVEY_SOURCES.map((s, i) => (
+            <button
+              key={s.value}
+              type="button"
+              className={`pos-survey-option ${s.value === 'other' && otherOpen ? 'active' : ''}`}
+              disabled={busy}
+              onClick={() => (s.value === 'other' ? setOtherOpen(true) : save(s.value))}
+            >
+              <span className="pos-survey-num">{i + 1}</span>
+              {s.label}
+            </button>
+          ))}
+        </div>
+
+        {otherOpen && (
+          <form
+            className="pos-field"
+            style={{ marginTop: '0.75rem' }}
+            onSubmit={(e) => {
+              e.preventDefault();
+              save('other');
+            }}
+          >
+            <span>Where did they hear about us?</span>
+            <input
+              className="pos-input"
+              autoFocus
+              maxLength={200}
+              placeholder="e.g. Google Maps, Facebook, walked past"
+              value={otherText}
+              onChange={(e) => setOtherText(e.target.value)}
+            />
+          </form>
+        )}
+
+        <div className="pos-modal-actions">
+          <button type="button" className="pos-btn ghost" disabled={busy} onClick={onDone}>
+            Skip
+          </button>
+          {otherOpen && (
+            <button
+              type="button"
+              className="pos-btn primary"
+              disabled={busy}
+              onClick={() => save('other')}
+            >
+              {busy ? 'Saving…' : 'Save'}
+            </button>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

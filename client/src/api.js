@@ -625,6 +625,13 @@ export const api = {
   posUpdatePurchase: (id, body) =>
     request(`/api/pos/purchases/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
   posDeletePurchase: (id) => request(`/api/pos/purchases/${id}`, { method: 'DELETE' }),
+  posGetSurvey: (params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return request(`/api/pos/survey${qs ? `?${qs}` : ''}`);
+  },
+  posCreateSurvey: (body) =>
+    request('/api/pos/survey', { method: 'POST', body: JSON.stringify(body) }),
+  posDeleteSurvey: (id) => request(`/api/pos/survey/${id}`, { method: 'DELETE' }),
   posSummaryReport: (params = {}) => {
     const qs = new URLSearchParams(params).toString();
     return request(`/api/pos/reports/summary${qs ? `?${qs}` : ''}`);

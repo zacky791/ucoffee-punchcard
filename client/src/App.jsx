@@ -18,6 +18,7 @@ import RecipePage from './pages/ordering/RecipePage';
 import OverheadsPage from './pages/ordering/OverheadsPage';
 import ExpensesPage from './pages/ordering/ExpensesPage';
 import SettingsPage from './pages/ordering/SettingsPage';
+import SurveyPage from './pages/ordering/SurveyPage';
 import './App.css';
 
 export default function App() {
@@ -62,6 +63,7 @@ export default function App() {
             <Route path="categories" element={<CategoriesPage />} />
             <Route path="inventory" element={<InventoryPage />} />
             <Route path="expenses" element={<ExpensesPage />} />
+            <Route path="survey" element={<SurveyPage />} />
             <Route path="recipe" element={<RecipePage />} />
             <Route path="profit" element={<ProfitPage />} />
             <Route path="overheads" element={<OverheadsPage />} />

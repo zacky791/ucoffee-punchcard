@@ -1458,6 +1458,65 @@ function createPosRouter(getSupabase) {
     }
   });
 
+  // ——— Customer survey: how did you hear about us? ———
+  const SURVEY_SOURCES = ['banner', 'tiktok', 'instagram', 'friends', 'google', 'other'];
+
+  router.get('/survey', requireDb, async (req, res) => {
+    try {
+      let query = req.supabase
+        .from('pos_survey_responses')
+        .select('*, order:pos_orders(order_number)')
+        .order('created_at', { ascending: false });
+      if (req.query.from) query = query.gte('created_at', String(req.query.from));
+      if (req.query.to) query = query.lt('created_at', String(req.query.to));
+      const { data, error } = await query.limit(5000);
+      if (error) throw error;
+      res.json(data || []);
+    } catch (err) {
+      sendError(res, err);
+    }
+  });
+
+  router.post('/survey', requireDb, async (req, res) => {
+    try {
+      const body = req.body || {};
+      const source = String(body.source || '');
+      if (!SURVEY_SOURCES.includes(source)) {
+        return res.status(400).json({ error: 'Choose how the customer heard about us' });
+      }
+      const otherText = String(body.other_text || '').trim().slice(0, 200);
+      if (source === 'other' && !otherText) {
+        return res.status(400).json({ error: 'Type where the customer heard about us' });
+      }
+      const { data, error } = await req.supabase
+        .from('pos_survey_responses')
+        .insert({
+          order_id: body.order_id || null,
+          source,
+          other_text: source === 'other' ? otherText : null,
+        })
+        .select('*')
+        .single();
+      if (error) throw error;
+      res.status(201).json(data);
+    } catch (err) {
+      sendError(res, err);
+    }
+  });
+
+  router.delete('/survey/:id', requireDb, async (req, res) => {
+    try {
+      const { error } = await req.supabase
+        .from('pos_survey_responses')
+        .delete()
+        .eq('id', req.params.id);
+      if (error) throw error;
+      res.json({ ok: true });
+    } catch (err) {
+      sendError(res, err);
+    }
+  });
+
   // ——— Costing / profit margin ———
   router.get('/costing', requireDb, async (req, res) => {
     try {
