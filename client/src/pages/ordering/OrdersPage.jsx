@@ -137,7 +137,18 @@ export default function OrdersPage() {
                 </tr>
               )}
               {orders.map((o) => (
-                <tr key={o.id}>
+                <tr
+                  key={o.id}
+                  className="pos-row-link"
+                  tabIndex={0}
+                  onClick={() => openDetail(o.id)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      openDetail(o.id);
+                    }
+                  }}
+                >
                   <td className="pos-cell-title">
                     <strong>{o.order_number}</strong>
                   </td>
@@ -159,7 +170,11 @@ export default function OrdersPage() {
                     <button
                       type="button"
                       className="pos-btn ghost"
-                      onClick={() => openDetail(o.id)}
+                      tabIndex={-1}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openDetail(o.id);
+                      }}
                     >
                       Details
                     </button>
@@ -202,6 +217,18 @@ const PencilIcon = () => (
   </svg>
 );
 
+const CloseIcon = () => (
+  <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+    <path
+      d="M6 6l12 12M18 6L6 18"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+    />
+  </svg>
+);
+
 const TrashIcon = () => (
   <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true">
     <path
@@ -217,14 +244,8 @@ const TrashIcon = () => (
 
 export function OrderDetailModal({ order, currency, onClose, onUpdated, onDeleted, onError }) {
   const [busy, setBusy] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
   const [pinFor, setPinFor] = useState(null);
   const [editing, setEditing] = useState(false);
-
-  function askPin(action) {
-    setMenuOpen(false);
-    setPinFor(action);
-  }
 
   async function unlocked() {
     const action = pinFor;
@@ -301,46 +322,42 @@ export function OrderDetailModal({ order, currency, onClose, onUpdated, onDelete
 
   return (
     <div className="pos-modal-backdrop" onClick={busy ? undefined : onClose}>
-      <div
-        className="pos-modal wide"
-        onClick={(e) => {
-          e.stopPropagation();
-          if (menuOpen) setMenuOpen(false);
-        }}
-      >
+      <div className="pos-modal wide" onClick={(e) => e.stopPropagation()}>
         <div className="pos-modal-title">
           <h2>{order.order_number}</h2>
-          <div className="pos-kebab">
+          <div className="pos-modal-icons">
+            {order.status !== 'cancelled' && (
+              <button
+                type="button"
+                className="pos-icon-btn"
+                aria-label="Edit order"
+                title="Edit order"
+                disabled={busy}
+                onClick={() => setPinFor('edit')}
+              >
+                <PencilIcon />
+              </button>
+            )}
             <button
               type="button"
-              className="pos-kebab-btn"
-              aria-label="More actions"
-              aria-expanded={menuOpen}
+              className="pos-icon-btn danger"
+              aria-label="Delete order"
+              title="Delete order"
               disabled={busy}
-              onClick={(e) => {
-                e.stopPropagation();
-                setMenuOpen((v) => !v);
-              }}
+              onClick={() => setPinFor('delete')}
             >
-              ⋮
+              <TrashIcon />
             </button>
-            {menuOpen && (
-              <div className="pos-kebab-menu" role="menu">
-                {order.status !== 'cancelled' && (
-                  <button type="button" role="menuitem" onClick={() => askPin('edit')}>
-                    <PencilIcon /> Edit order
-                  </button>
-                )}
-                <button
-                  type="button"
-                  role="menuitem"
-                  className="danger"
-                  onClick={() => askPin('delete')}
-                >
-                  <TrashIcon /> Delete order
-                </button>
-              </div>
-            )}
+            <button
+              type="button"
+              className="pos-icon-btn"
+              aria-label="Close"
+              title="Close"
+              disabled={busy}
+              onClick={onClose}
+            >
+              <CloseIcon />
+            </button>
           </div>
         </div>
         {pinFor && (
@@ -424,22 +441,9 @@ export function OrderDetailModal({ order, currency, onClose, onUpdated, onDelete
         </div>
 
         <div className="pos-modal-actions" style={{ flexWrap: 'wrap' }}>
-          <button type="button" className="pos-btn ghost" onClick={onClose}>
-            Close
-          </button>
           <button type="button" className="pos-btn" disabled={busy} onClick={reprint}>
             Reprint receipt
           </button>
-          {order.status === 'paid' && (
-            <button
-              type="button"
-              className="pos-btn"
-              disabled={busy}
-              onClick={() => setStatus('preparing')}
-            >
-              Mark preparing
-            </button>
-          )}
           {order.status === 'preparing' && (
             <button
               type="button"
@@ -759,7 +763,7 @@ function OrderEditModal({ order, currency, onCancel, onSaved }) {
         </div>
         {itemCount === 0 && (
           <div className="pos-alert warn">
-            Every item is removed. Add an item, or use Delete order from the ⋮ menu instead.
+            Every item is removed. Add an item, or use the trash icon on the order to delete it instead.
           </div>
         )}
 

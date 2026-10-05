@@ -1632,6 +1632,95 @@ select:focus {
   background: rgba(138, 82, 68, 0.12);
 }
 
+.week-day-edit {
+  display: inline-grid;
+  place-items: center;
+  align-self: center;
+  width: 26px;
+  height: 26px;
+  margin-left: auto;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface);
+  color: var(--brand);
+  cursor: pointer;
+}
+
+.week-mini-head em + .week-day-edit {
+  margin-left: 0.3rem;
+}
+
+.week-day-edit:hover {
+  background: rgba(196, 95, 26, 0.12);
+}
+
+.day-attendance-card {
+  width: min(100%, 560px);
+  max-height: calc(100vh - 2rem);
+  overflow-y: auto;
+}
+
+.day-attendance-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.6rem;
+}
+
+.day-attendance-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 0.5rem;
+  padding: 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.day-attendance-row label {
+  display: grid;
+  gap: 0.25rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  min-width: 0;
+}
+
+.day-attendance-row select,
+.day-attendance-row input {
+  width: 100%;
+  min-width: 0;
+}
+
+.day-attendance-remove {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-strong);
+  color: var(--out);
+  cursor: pointer;
+}
+
+.day-attendance-remove:hover {
+  background: rgba(138, 82, 68, 0.12);
+}
+
+@media (max-width: 520px) {
+  .day-attendance-row {
+    grid-template-columns: 1fr 1fr auto;
+  }
+
+  .day-attendance-staff {
+    grid-column: 1 / -1;
+  }
+}
+
 .modal-backdrop {
   position: fixed;
   inset: 0;

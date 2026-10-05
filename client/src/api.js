@@ -265,6 +265,34 @@ async function manualClockOutDirect(body) {
   };
 }
 
+async function savePunchesDirect({ create = [], update = [], remove = [] } = {}) {
+  requireSupabase();
+  if (remove.length) {
+    const { error } = await supabase.from('punches').delete().in('id', remove);
+    if (error) throw new Error(error.message);
+  }
+  for (const p of update) {
+    const { error } = await supabase
+      .from('punches')
+      .update({ punched_at: new Date(p.punched_at).toISOString() })
+      .eq('id', p.id);
+    if (error) throw new Error(error.message);
+  }
+  if (create.length) {
+    const { error } = await supabase.from('punches').insert(
+      create.map((p) => ({
+        staff_id: p.staff_id,
+        type: p.type,
+        punched_at: new Date(p.punched_at).toISOString(),
+        note: 'Manual entry',
+        location_label: 'Manual entry',
+      }))
+    );
+    if (error) throw new Error(error.message);
+  }
+  return { ok: true };
+}
+
 async function getPunchesDirect(params = {}) {
   requireSupabase();
   const limit = Math.min(Number(params.limit) || 50, 500);
@@ -484,6 +512,10 @@ export const api = {
           method: 'POST',
           body: JSON.stringify(body),
         }),
+  savePunches: (body) =>
+    useDirectSupabase
+      ? savePunchesDirect(body)
+      : request('/api/punches/batch', { method: 'POST', body: JSON.stringify(body) }),
   getPunches: async (params = {}) => {
     if (useDirectSupabase) return asArray(await getPunchesDirect(params));
     const qs = new URLSearchParams(params).toString();

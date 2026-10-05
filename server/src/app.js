@@ -459,6 +459,60 @@ app.post('/api/punches/manual-out', requireDb, async (req, res) => {
   }
 });
 
+// Manual attendance edits from the Working schedule (PIN-checked on the client).
+app.post('/api/punches/batch', requireDb, async (req, res) => {
+  try {
+    const { create = [], update = [], remove = [] } = req.body || {};
+    const latest = Date.now() + 5 * 60 * 1000;
+    const validTime = (value) => {
+      const at = new Date(value);
+      if (!value || Number.isNaN(at.getTime())) return 'Each time must be a valid date and time';
+      if (at.getTime() > latest) return 'Times cannot be in the future';
+      return null;
+    };
+    for (const p of create) {
+      if (!p.staff_id) return res.status(400).json({ error: 'Choose who worked for each row' });
+      if (!['in', 'out'].includes(p.type)) return res.status(400).json({ error: 'Invalid punch type' });
+      const bad = validTime(p.punched_at);
+      if (bad) return res.status(400).json({ error: bad });
+    }
+    for (const p of update) {
+      if (!p.id) return res.status(400).json({ error: 'Missing punch id' });
+      const bad = validTime(p.punched_at);
+      if (bad) return res.status(400).json({ error: bad });
+    }
+
+    const db = getSupabase();
+    if (remove.length) {
+      const { error } = await db.from('punches').delete().in('id', remove);
+      if (error) throw error;
+    }
+    for (const p of update) {
+      const { error } = await db
+        .from('punches')
+        .update({ punched_at: new Date(p.punched_at).toISOString() })
+        .eq('id', p.id);
+      if (error) throw error;
+    }
+    if (create.length) {
+      const { error } = await db.from('punches').insert(
+        create.map((p) => ({
+          staff_id: p.staff_id,
+          type: p.type,
+          punched_at: new Date(p.punched_at).toISOString(),
+          note: 'Manual entry',
+          location_label: 'Manual entry',
+        }))
+      );
+      if (error) throw error;
+    }
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message || 'Failed to save attendance' });
+  }
+});
+
 app.get('/api/punches/today', requireDb, async (_req, res) => {
   try {
     const start = new Date();

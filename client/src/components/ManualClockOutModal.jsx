@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { api } from '../api';
 import { MAX_SHIFT_HOURS, formatClock12 } from '../lib/performance';
 
@@ -75,7 +76,7 @@ export default function ManualClockOutModal({ person, closeTime, onClose, onSave
     }
   }
 
-  return (
+  return createPortal(
     <div
       className="modal-backdrop"
       role="dialog"
@@ -163,6 +164,7 @@ export default function ManualClockOutModal({ person, closeTime, onClose, onSave
           </form>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

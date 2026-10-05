@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api } from '../api';
 import ManualClockOutModal from '../components/ManualClockOutModal';
+import DayAttendanceModal from '../components/DayAttendanceModal';
 import {
   DAY_LABELS,
   DAY_SHORT,
@@ -24,6 +25,7 @@ export default function WeekOverview() {
   const [roster, setRoster] = useState([]);
   const [hours, setHours] = useState([]);
   const [editing, setEditing] = useState(null);
+  const [editingDay, setEditingDay] = useState(null);
   const [notice, setNotice] = useState('');
 
   const thisWeek = startOfWeek(new Date());
@@ -144,6 +146,20 @@ export default function WeekOverview() {
         />
       )}
 
+      {editingDay && (
+        <DayAttendanceModal
+          date={editingDay}
+          punches={punches}
+          staff={staff}
+          onClose={() => setEditingDay(null)}
+          onSaved={() => {
+            setNotice(`Attendance for ${formatDayDate(editingDay)} saved`);
+            setEditingDay(null);
+            load(weekStart);
+          }}
+        />
+      )}
+
       {loading ? (
         <p className="state-msg">Loading week…</p>
       ) : (
@@ -168,6 +184,31 @@ export default function WeekOverview() {
                     </span>
                   </span>
                   {day.is_closed && <em>Closed</em>}
+                  <button
+                    type="button"
+                    className="week-day-edit"
+                    onClick={() => {
+                      setNotice('');
+                      setEditingDay(day.date);
+                    }}
+                    aria-label={`Edit who worked on ${formatDayDate(day.date)}`}
+                    title="Edit who worked"
+                  >
+                    <svg
+                      viewBox="0 0 24 24"
+                      width="14"
+                      height="14"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d="M12 20h9" />
+                      <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                    </svg>
+                  </button>
                 </header>
 
                 {day.worked.length === 0 && day.missed.length === 0 ? (

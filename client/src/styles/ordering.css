@@ -828,7 +828,7 @@ html:has(.pos-modal-backdrop) body {
   font-size: 0.9rem;
 }
 
-/* Order details: ⋮ menu, PIN step, edit form */
+/* Order details: edit / delete / close icons, PIN step, edit form */
 .pos-modal-title {
   display: flex;
   align-items: flex-start;
@@ -840,12 +840,15 @@ html:has(.pos-modal-backdrop) body {
   margin: 0;
 }
 
-.pos-kebab {
-  position: relative;
+.pos-modal-icons {
+  display: flex;
+  gap: 0.4rem;
   flex-shrink: 0;
 }
 
-.pos-kebab-btn {
+.pos-icon-btn {
+  display: grid;
+  place-items: center;
   width: 38px;
   height: 38px;
   min-height: 0;
@@ -853,55 +856,31 @@ html:has(.pos-modal-backdrop) body {
   border-radius: 10px;
   border: 1px solid var(--pos-line);
   background: #fff;
-  color: var(--pos-ink, #1f2937);
-  font-size: 1.35rem;
-  line-height: 1;
+  color: var(--pos-ink);
   cursor: pointer;
 }
 
-.pos-kebab-btn:hover,
-.pos-kebab-btn[aria-expanded='true'] {
+.pos-icon-btn:hover:not(:disabled) {
   background: var(--pos-red-soft);
 }
 
-.pos-kebab-menu {
-  position: absolute;
-  right: 0;
-  top: calc(100% + 0.35rem);
-  z-index: 5;
-  min-width: 170px;
-  padding: 0.35rem;
-  background: #fff;
-  border: 1px solid var(--pos-line);
-  border-radius: 12px;
-  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.16);
-  display: flex;
-  flex-direction: column;
+.pos-icon-btn.danger {
+  color: #dc2626;
 }
 
-.pos-kebab-menu button {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  width: 100%;
-  min-height: 42px;
-  padding: 0.5rem 0.7rem;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  font-weight: 600;
-  text-align: left;
+.pos-icon-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.pos-row-link {
   cursor: pointer;
 }
 
-.pos-kebab-menu button:hover {
-  background: #f3f4f6;
-}
-
-.pos-kebab-menu button.danger {
-  color: #dc2626;
+.pos-row-link:hover,
+.pos-row-link:focus-visible {
+  background: var(--pos-red-soft);
+  outline: none;
 }
 
 .pos-pin {
