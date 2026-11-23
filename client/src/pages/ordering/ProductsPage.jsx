@@ -248,11 +248,33 @@ export default function ProductsPage() {
     <div>
       <div className="pos-page-head">
         <div>
-          <h1>Products / Menu</h1>
+          <h1>Menu</h1>
         </div>
-        <button type="button" className="pos-btn primary" onClick={() => setEditing({})}>
-          + Add product
-        </button>
+        <div className="pos-page-head-actions">
+          <div className="pos-segment small" role="tablist" aria-label="View">
+            <button
+              type="button"
+              role="tab"
+              className={view === 'cards' ? 'active' : ''}
+              aria-selected={view === 'cards'}
+              onClick={() => setView('cards')}
+            >
+              Cards
+            </button>
+            <button
+              type="button"
+              role="tab"
+              className={view === 'list' ? 'active' : ''}
+              aria-selected={view === 'list'}
+              onClick={() => setView('list')}
+            >
+              List
+            </button>
+          </div>
+          <button type="button" className="pos-btn primary" onClick={() => setEditing({})}>
+            + Add product
+          </button>
+        </div>
       </div>
 
       {error && <div className="pos-alert error">{error}</div>}
@@ -280,26 +302,6 @@ export default function ProductsPage() {
               {c.name}
             </button>
           ))}
-        </div>
-        <div className="pos-segment" role="tablist" aria-label="View">
-          <button
-            type="button"
-            role="tab"
-            className={view === 'cards' ? 'active' : ''}
-            aria-selected={view === 'cards'}
-            onClick={() => setView('cards')}
-          >
-            Cards
-          </button>
-          <button
-            type="button"
-            role="tab"
-            className={view === 'list' ? 'active' : ''}
-            aria-selected={view === 'list'}
-            onClick={() => setView('list')}
-          >
-            List
-          </button>
         </div>
       </div>
 

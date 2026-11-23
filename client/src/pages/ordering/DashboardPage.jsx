@@ -41,16 +41,6 @@ function fmtQty(n) {
   return Number(n || 0).toLocaleString('en-MY', { maximumFractionDigits: 2 });
 }
 
-function dayName(key, today) {
-  if (key === today) return 'Today';
-  if (key === addDays(today, -1)) return 'Yesterday';
-  return parseDateKey(key).toLocaleDateString('en-GB', {
-    weekday: 'short',
-    day: 'numeric',
-    month: 'short',
-  });
-}
-
 function RefreshIcon() {
   return (
     <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
@@ -68,7 +58,20 @@ function RefreshIcon() {
 
 export default function DashboardPage() {
   const today = businessDateKey(new Date().toISOString());
-  const [viewDay, setViewDay] = useState(today);
+  const period = usePeriodRange(today, { initialMode: 'week' });
+  const {
+    mode,
+    from,
+    to,
+    label: periodLabel,
+    canGoForward,
+    showCustom,
+    presets,
+    pickers,
+    shiftRange,
+    setFromDate,
+    setToDate,
+  } = period;
   const [orders, setOrders] = useState([]);
   const [products, setProducts] = useState([]);
   const [currency, setCurrency] = useState('MYR');
@@ -80,11 +83,12 @@ export default function DashboardPage() {
   const [lowStock, setLowStock] = useState([]);
   const [ordersOpen, setOrdersOpen] = useState(false);
 
-  const loadDay = useCallback(async (day) => {
-    const range = businessDayRange(day);
+  const loadPeriod = useCallback(async (fromKey, toKey) => {
+    const rangeFrom = businessDayRange(fromKey).from;
+    const rangeTo = businessDayRange(toKey).to;
     const [list, profit, settings, inventory] = await Promise.all([
-      api.posGetOrders({ from: range.from, to: range.to, limit: 200 }),
-      api.posProfitReport({ from: range.from, to: range.to }),
+      api.posGetOrders({ from: rangeFrom, to: rangeTo, limit: 500 }),
+      api.posProfitReport({ from: rangeFrom, to: rangeTo }),
       api.posGetSettings(),
       api.posGetInventory().catch(() => []),
     ]);
@@ -98,20 +102,21 @@ export default function DashboardPage() {
 
   useEffect(() => {
     let alive = true;
-    loadDay(viewDay)
+    setLoading(true);
+    loadPeriod(from, to)
       .catch((err) => alive && setError(err.message))
       .finally(() => alive && setLoading(false));
     return () => {
       alive = false;
     };
-  }, [loadDay, viewDay]);
+  }, [loadPeriod, from, to]);
 
   async function refresh() {
     if (refreshing) return;
     setRefreshing(true);
     setError('');
     try {
-      await loadDay(viewDay);
+      await loadPeriod(from, to);
       setRefreshKey((k) => k + 1);
     } catch (err) {
       setError(err.message);
@@ -123,8 +128,10 @@ export default function DashboardPage() {
   const paid = orders.filter((o) => PAID.includes(o.status));
   const totalSales = paid.reduce((s, o) => s + Number(o.grand_total || 0), 0);
   const itemsSold = products.reduce((s, p) => s + Number(p.quantity || 0), 0);
-  const label = dayName(viewDay, today);
-  const isToday = viewDay === today;
+  const isTodayOnly = mode === 'day' && from === today && to === today;
+  const salesHeading = isTodayOnly ? 'Today’s sales' : `${periodLabel} sales`;
+  const listHeading = isTodayOnly ? 'Today sales' : `${periodLabel} sales`;
+  const emptyOrders = isTodayOnly ? 'No orders yet today' : `No orders in ${periodLabel}`;
 
   async function openOrder(id) {
     try {
@@ -148,6 +155,26 @@ export default function DashboardPage() {
           <RefreshIcon />
         </button>
       </div>
+
+      <div className="pos-report-bar">
+        <PeriodRangeNav
+          mode={mode}
+          presets={presets}
+          pickers={pickers}
+          shiftRange={shiftRange}
+          canGoForward={canGoForward}
+        />
+      </div>
+
+      {showCustom && (
+        <PeriodCustomRange
+          from={from}
+          to={to}
+          today={today}
+          setFromDate={setFromDate}
+          setToDate={setToDate}
+        />
+      )}
 
       {error && <div className="pos-alert error">{error}</div>}
       {loading && <div className="pos-card">Loading…</div>}
@@ -193,7 +220,7 @@ export default function DashboardPage() {
 
           <div className="pos-grid-stats two">
             <div className="pos-card pos-stat">
-              <span>{isToday ? 'Today’s sales' : `${label} sales`}</span>
+              <span>{salesHeading}</span>
               <strong>{formatMoney(totalSales, currency)}</strong>
             </div>
             <div className="pos-card pos-stat">
@@ -205,7 +232,7 @@ export default function DashboardPage() {
           <div className="pos-split">
             <div className="pos-card">
               <h2 className="pos-card-title">
-                {isToday ? 'Today sales' : `${label} sales`}
+                {listHeading}
                 {itemsSold > 0 && <small> · {itemsSold} item(s)</small>}
               </h2>
               <ul className="pos-list">
@@ -244,7 +271,7 @@ export default function DashboardPage() {
                 <ul className="pos-list">
                   {orders.length === 0 && (
                     <li>
-                      <span>{isToday ? 'No orders yet today' : `No orders on ${label}`}</span>
+                      <span>{emptyOrders}</span>
                     </li>
                   )}
                   {orders.map((o) => (
@@ -278,10 +305,12 @@ export default function DashboardPage() {
           </div>
 
           <SalesTrend
-            today={today}
             currency={currency}
             refreshKey={refreshKey}
-            onDayChange={setViewDay}
+            mode={mode}
+            from={from}
+            to={to}
+            label={periodLabel}
           />
         </>
       )}
@@ -292,10 +321,10 @@ export default function DashboardPage() {
           currency={currency}
           onClose={() => setSelected(null)}
           onUpdated={async () => {
-            await loadDay(viewDay);
+            await loadPeriod(from, to);
             setSelected(await api.posGetOrder(selected.id));
           }}
-          onDeleted={() => loadDay(viewDay)}
+          onDeleted={() => loadPeriod(from, to)}
           onError={setError}
         />
       )}
@@ -303,21 +332,7 @@ export default function DashboardPage() {
   );
 }
 
-function SalesTrend({ today, currency, refreshKey = 0, onDayChange }) {
-  const period = usePeriodRange(today, { initialMode: 'week' });
-  const {
-    mode,
-    from,
-    to,
-    label,
-    canGoForward,
-    showCustom,
-    presets,
-    pickers,
-    shiftRange,
-    setFromDate,
-    setToDate,
-  } = period;
+function SalesTrend({ currency, refreshKey = 0, mode, from, to, label }) {
   const [buckets, setBuckets] = useState(null);
   const [error, setError] = useState('');
   const scrollRef = useRef(null);
@@ -341,10 +356,6 @@ function SalesTrend({ today, currency, refreshKey = 0, onDayChange }) {
       alive = false;
     };
   }, [from, to, byMonth, refreshKey]);
-
-  useEffect(() => {
-    onDayChange?.(to);
-  }, [to, onDayChange]);
 
   const bars = useMemo(() => {
     const found = Object.fromEntries((buckets || []).map((b) => [b.key, b]));
@@ -384,8 +395,8 @@ function SalesTrend({ today, currency, refreshKey = 0, onDayChange }) {
   const activeBar = bars.find((b) => b.key === active);
 
   return (
-    <div className="pos-card" style={{ marginTop: '0.85rem' }}>
-      <div className="pos-report-bar pos-trend-head" style={{ marginBottom: 0 }}>
+    <div className="pos-card pos-trend-graph-card">
+      <div className="pos-report-bar pos-trend-head">
         <h2 className="pos-card-title" style={{ margin: 0 }}>
           Sales trend
         </h2>
@@ -394,23 +405,6 @@ function SalesTrend({ today, currency, refreshKey = 0, onDayChange }) {
           <span> · {label}</span>
         </strong>
       </div>
-      <PeriodRangeNav
-        className="pos-trend-presets"
-        mode={mode}
-        presets={presets}
-        pickers={pickers}
-        shiftRange={shiftRange}
-        canGoForward={canGoForward}
-      />
-      {showCustom && (
-        <PeriodCustomRange
-          from={from}
-          to={to}
-          today={today}
-          setFromDate={setFromDate}
-          setToDate={setToDate}
-        />
-      )}
       {error && <div className="pos-alert error">{error}</div>}
       {!buckets ? (
         <div className="pos-meta">Loading…</div>

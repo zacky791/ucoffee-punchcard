@@ -1,4 +1,18 @@
-/** Shared Today / Week / Month / Custom button row. */
+function PencilIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+/** Shared Today / Week / Month / filter button row. */
 export default function PeriodRangeNav({
   mode,
   presets,
@@ -26,17 +40,22 @@ export default function PeriodRangeNav({
       >
         →
       </button>
-      {presets.map((p) => (
-        <button
-          key={p.id}
-          type="button"
-          className={`pos-btn ${mode === p.id ? 'primary' : 'ghost'}`}
-          aria-pressed={mode === p.id}
-          onClick={pickers[p.id]}
-        >
-          {p.label}
-        </button>
-      ))}
+      {presets.map((p) => {
+        const isCustom = p.id === 'custom';
+        return (
+          <button
+            key={p.id}
+            type="button"
+            className={`pos-btn ${isCustom ? 'pos-day-nav-filter' : ''} ${mode === p.id ? 'primary' : 'ghost'}`.trim()}
+            aria-label={isCustom ? 'Custom date range' : undefined}
+            aria-pressed={mode === p.id}
+            title={isCustom ? 'Custom date range' : undefined}
+            onClick={pickers[p.id]}
+          >
+            {isCustom ? <PencilIcon /> : p.label}
+          </button>
+        );
+      })}
     </div>
   );
 }
