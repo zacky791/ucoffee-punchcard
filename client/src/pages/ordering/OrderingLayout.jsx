@@ -1,19 +1,23 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { CartProvider } from '../../context/CartContext';
 import { restorePrinter } from '../../lib/receiptPrinter';
 import '../../styles/ordering.css';
 
+const PINNED_NAV = [{ to: '/ordering/pos', label: 'New Order' }];
+const MOBILE_MQ = '(max-width: 980px)';
+
 const NAV_GROUPS = [
   {
-    label: 'Sell',
+    id: 'main',
+    label: 'Main',
     items: [
-      { to: '/ordering/pos', label: 'New Order' },
       { to: '/ordering/dashboard', label: 'Dashboard' },
       { to: '/ordering/orders', label: 'Orders' },
     ],
   },
   {
+    id: 'menu',
     label: 'Menu',
     items: [
       { to: '/ordering/products', label: 'Products' },
@@ -22,6 +26,7 @@ const NAV_GROUPS = [
     ],
   },
   {
+    id: 'stock',
     label: 'Stock',
     items: [
       { to: '/ordering/inventory', label: 'Inventory' },
@@ -30,6 +35,7 @@ const NAV_GROUPS = [
     ],
   },
   {
+    id: 'finance',
     label: 'Finance',
     items: [
       { to: '/ordering/profit', label: 'Profit' },
@@ -39,6 +45,7 @@ const NAV_GROUPS = [
     ],
   },
   {
+    id: 'more',
     label: 'More',
     items: [
       { to: '/ordering/survey', label: 'Survey' },
@@ -48,8 +55,6 @@ const NAV_GROUPS = [
   },
 ];
 
-const NAV_ITEMS = NAV_GROUPS.flatMap((g) => g.items);
-
 function groupForPath(pathname) {
   return (
     NAV_GROUPS.find((g) =>
@@ -58,10 +63,20 @@ function groupForPath(pathname) {
   );
 }
 
+function isMobileNav() {
+  return typeof window !== 'undefined' && window.matchMedia(MOBILE_MQ).matches;
+}
+
 export default function OrderingLayout() {
   const { pathname } = useLocation();
   const activeGroup = useMemo(() => groupForPath(pathname), [pathname]);
-  const [open, setOpen] = useState(() => (activeGroup ? { [activeGroup]: true } : { Sell: true }));
+  const [desktopOpen, setDesktopOpen] = useState(() => activeGroup || 'Main');
+  const [mobileOpen, setMobileOpen] = useState(null);
+  const mobileNavRef = useRef(null);
+  const mobileOpenData = useMemo(
+    () => NAV_GROUPS.find((g) => g.label === mobileOpen) || null,
+    [mobileOpen]
+  );
 
   useEffect(() => {
     restorePrinter();
@@ -69,21 +84,41 @@ export default function OrderingLayout() {
 
   useEffect(() => {
     if (!activeGroup) return;
-    setOpen((prev) => (prev[activeGroup] ? prev : { ...prev, [activeGroup]: true }));
+    setDesktopOpen(activeGroup);
   }, [activeGroup]);
 
   useEffect(() => {
-    const nav = document.querySelector('.pos-side-nav-mobile');
-    const link = nav?.querySelector('a.active');
-    if (!nav || !link || nav.scrollWidth <= nav.clientWidth) return;
-    nav.scrollTo({
-      left: link.offsetLeft - (nav.clientWidth - link.offsetWidth) / 2,
-      behavior: 'smooth',
-    });
+    setMobileOpen(null);
   }, [pathname]);
 
-  function toggleGroup(label) {
-    setOpen((prev) => ({ ...prev, [label]: !prev[label] }));
+  useEffect(() => {
+    if (!mobileOpen) return;
+    function onPointerDown(e) {
+      if (!mobileNavRef.current?.contains(e.target)) setMobileOpen(null);
+    }
+    document.addEventListener('pointerdown', onPointerDown);
+    return () => document.removeEventListener('pointerdown', onPointerDown);
+  }, [mobileOpen]);
+
+  useEffect(() => {
+    if (!isMobileNav()) return;
+    const scroll = mobileNavRef.current?.querySelector('.pos-nav-scroll');
+    const chip =
+      scroll?.querySelector('.pos-nav-group-toggle.active') ||
+      scroll?.querySelector('.pos-nav-pinned-link.active');
+    if (!scroll || !chip || scroll.scrollWidth <= scroll.clientWidth) return;
+    scroll.scrollTo({
+      left: chip.offsetLeft - (scroll.clientWidth - chip.offsetWidth) / 2,
+      behavior: 'smooth',
+    });
+  }, [pathname, activeGroup]);
+
+  function toggleDesktop(label) {
+    setDesktopOpen((prev) => (prev === label ? null : label));
+  }
+
+  function toggleMobile(label) {
+    setMobileOpen((prev) => (prev === label ? null : label));
   }
 
   return (
@@ -99,43 +134,98 @@ export default function OrderingLayout() {
           </div>
 
           <nav className="pos-side-nav pos-side-nav-desktop" aria-label="Ordering sections">
-            {NAV_GROUPS.map((group) => {
-              const isOpen = !!open[group.label];
-              const hasActive = group.label === activeGroup;
-              return (
-                <div
-                  key={group.label}
-                  className={`pos-nav-group${isOpen ? ' open' : ''}${hasActive ? ' active' : ''}`}
-                >
-                  <button
-                    type="button"
-                    className="pos-nav-group-toggle"
-                    aria-expanded={isOpen}
-                    onClick={() => toggleGroup(group.label)}
+            <div className="pos-nav-pinned">
+              {PINNED_NAV.map((item) => (
+                <NavLink key={item.to} to={item.to} end={item.end} className="pos-nav-pinned-link">
+                  {item.label}
+                </NavLink>
+              ))}
+            </div>
+
+            <div className="pos-nav-groups">
+              {NAV_GROUPS.map((group) => {
+                const isOpen = desktopOpen === group.label;
+                const hasActive = group.label === activeGroup;
+                return (
+                  <div
+                    key={group.label}
+                    className={`pos-nav-group pos-nav-group--${group.id}${isOpen ? ' open' : ''}${hasActive ? ' active' : ''}`}
                   >
-                    <span>{group.label}</span>
-                    <span className="pos-nav-caret" aria-hidden="true" />
-                  </button>
-                  {isOpen && (
-                    <div className="pos-nav-group-items">
-                      {group.items.map((item) => (
-                        <NavLink key={item.to} to={item.to} end={item.end}>
-                          {item.label}
-                        </NavLink>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+                    <button
+                      type="button"
+                      className="pos-nav-group-toggle"
+                      aria-expanded={isOpen}
+                      onClick={() => toggleDesktop(group.label)}
+                    >
+                      <span className="pos-nav-group-dot" aria-hidden="true" />
+                      <span className="pos-nav-group-label">{group.label}</span>
+                      <span className="pos-nav-caret" aria-hidden="true" />
+                    </button>
+                    {isOpen && (
+                      <div className="pos-nav-group-items" role="group" aria-label={`${group.label} pages`}>
+                        {group.items.map((item) => (
+                          <NavLink key={item.to} to={item.to} end={item.end}>
+                            {item.label}
+                          </NavLink>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           </nav>
 
-          <nav className="pos-side-nav pos-side-nav-mobile" aria-label="Ordering pages">
-            {NAV_ITEMS.map((item) => (
-              <NavLink key={item.to} to={item.to} end={item.end}>
-                {item.label}
-              </NavLink>
-            ))}
+          <nav
+            className="pos-side-nav pos-side-nav-mobile"
+            aria-label="Ordering sections"
+            ref={mobileNavRef}
+          >
+            <div className="pos-nav-scroll">
+              {PINNED_NAV.map((item) => (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  end={item.end}
+                  className="pos-nav-pinned-link"
+                  onClick={() => setMobileOpen(null)}
+                >
+                  {item.label}
+                </NavLink>
+              ))}
+              {NAV_GROUPS.map((group) => {
+                const isOpen = mobileOpen === group.label;
+                const hasActive = group.label === activeGroup;
+                return (
+                  <button
+                    key={group.label}
+                    type="button"
+                    className={`pos-nav-group-toggle pos-nav-group--${group.id}${isOpen ? ' open' : ''}${hasActive ? ' active' : ''}`}
+                    aria-expanded={isOpen}
+                    aria-haspopup="menu"
+                    onClick={() => toggleMobile(group.label)}
+                  >
+                    <span className="pos-nav-group-dot" aria-hidden="true" />
+                    <span className="pos-nav-group-label">{group.label}</span>
+                    <span className="pos-nav-caret" aria-hidden="true" />
+                  </button>
+                );
+              })}
+            </div>
+
+            {mobileOpenData && (
+              <div
+                className={`pos-nav-dropdown pos-nav-group--${mobileOpenData.id}`}
+                role="menu"
+                aria-label={`${mobileOpenData.label} pages`}
+              >
+                {mobileOpenData.items.map((item) => (
+                  <NavLink key={item.to} to={item.to} end={item.end} role="menuitem">
+                    {item.label}
+                  </NavLink>
+                ))}
+              </div>
+            )}
           </nav>
         </aside>
         <div className="pos-content">

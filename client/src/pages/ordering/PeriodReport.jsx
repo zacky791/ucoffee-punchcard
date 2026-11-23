@@ -11,7 +11,12 @@ import {
 } from '../../lib/performance';
 import { loadPunches, salaryByDate } from '../../lib/payroll';
 import { buildInsights } from '../../lib/reportInsights';
-import { categoryLabel, loadExpenses, overheadByDate } from '../../lib/overhead';
+import {
+  categoryLabel,
+  closedWeekdaysFromHours,
+  loadExpenses,
+  overheadByDate,
+} from '../../lib/overhead';
 import { loadPurchaseTotal } from '../../lib/purchases';
 import ExpenseStats from '../../components/ExpenseStats';
 import { BarList, ProfitChart } from '../../components/ReportCharts';
@@ -71,7 +76,7 @@ async function loadPeriod(period, anchor) {
   const bucket = period === 'yearly' ? 'month' : 'day';
   const todayKey = businessDateKey(new Date().toISOString());
   const capped = (key) => (key < todayKey ? key : todayKey);
-  const [summary, prevSummary, people, menu, settings, ex, purchases] = await Promise.all([
+  const [summary, prevSummary, people, menu, settings, ex, purchases, hours] = await Promise.all([
     api.posSummaryReport({
       from: businessDayRange(fromKey).from,
       to: businessDayRange(toKey).to,
@@ -87,15 +92,17 @@ async function loadPeriod(period, anchor) {
     api.posGetSettings(),
     loadExpenses(),
     loadPurchaseTotal(fromKey, capped(toKey)),
+    api.getHours().catch(() => []),
   ]);
+  const closed = closedWeekdaysFromHours(hours);
   return {
     purchases,
     fromKey,
     toKey,
     summary,
     prevSummary,
-    overhead: overheadByDate(ex.expenses, fromKey, capped(toKey)),
-    prevOverhead: overheadByDate(ex.expenses, prev.fromKey, capped(prev.toKey)),
+    overhead: overheadByDate(ex.expenses, fromKey, capped(toKey), closed),
+    prevOverhead: overheadByDate(ex.expenses, prev.fromKey, capped(prev.toKey), closed),
     expensesError: ex.error,
     salary: salaryByDate(people, fromKey, toKey),
     prevSalary: period === 'yearly' ? null : salaryByDate(people, prev.fromKey, prev.toKey),

@@ -1,15 +1,25 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../../api';
+import PeriodRangeNav, { PeriodCustomRange } from '../../components/PeriodRangeNav';
 import { formatMoney } from '../../context/CartContext';
 import {
   addDays,
   businessDateKey,
   businessDayRange,
+  DAY_LABELS,
   parseDateKey,
 } from '../../lib/performance';
-import { loadExpenses, overheadByDate, categoryLabel } from '../../lib/overhead';
+import {
+  loadExpenses,
+  overheadByDate,
+  categoryLabel,
+  closedWeekdaysFromHours,
+  isOpenDateKey,
+  monthlyEstimateForRange,
+} from '../../lib/overhead';
 import { loadPunches, salaryByDate } from '../../lib/payroll';
+import { usePeriodRange } from '../../lib/periodRange';
 
 function marginTone(margin) {
   if (margin == null) return '';
@@ -32,28 +42,17 @@ const ELECTRIC_ESTIMATE_MONTHLY = 400;
 const WATER_ESTIMATE_MONTHLY = 50;
 const UTILITY_CATEGORIES = new Set(['internet', 'electricity', 'water']);
 
-function overheadLineTip(line, currency, daysInRange) {
+function overheadLineTip(line, currency, daysInRange, fixedMonthly) {
   if (line.kind === 'one_off') return `${categoryLabel(line.category)} · one-off`;
   if (line.kind === 'estimate') return line.tip;
-  return `${categoryLabel(line.category)} · ${formatMoney(line.amount, currency)}/mo ≈ ${formatMoney(
-    line.total / daysInRange,
-    currency
-  )}/day × ${daysInRange}`;
-}
-
-function daysInMonthKey(ym) {
-  const [y, m] = ym.split('-').map(Number);
-  return new Date(y, m, 0).getDate();
-}
-
-/** Spread an estimated monthly bill over [fromKey, toKey], same as recurring overheads. */
-function monthlyEstimateForRange(monthlyAmount, fromKey, toKey) {
-  if (!fromKey || !toKey || fromKey > toKey || !monthlyAmount) return 0;
-  let total = 0;
-  for (let key = fromKey; key <= toKey; key = addDays(key, 1)) {
-    total += monthlyAmount / daysInMonthKey(key.slice(0, 7));
+  if (fixedMonthly && line.category !== 'electricity' && line.category !== 'water') {
+    return `${categoryLabel(line.category)} · full month ${formatMoney(line.amount, currency)}`;
   }
-  return round2(total);
+  const openDays = Math.max(1, daysInRange);
+  return `${categoryLabel(line.category)} · ${formatMoney(line.amount, currency)}/mo ÷ open days ≈ ${formatMoney(
+    line.total / openDays,
+    currency
+  )}/open day × ${openDays} (closed days skipped)`;
 }
 
 function InfoTip({ text, side = 'top' }) {
@@ -123,37 +122,15 @@ function ProfitSkeleton() {
   );
 }
 
-function dayName(key, today) {
-  if (key === today) return 'Today';
-  if (key === addDays(today, -1)) return 'Yesterday';
-  return parseDateKey(key).toLocaleDateString('en-GB', {
-    weekday: 'short',
-    day: 'numeric',
-    month: 'short',
-  });
-}
-
-function rangeLabel(from, to, today) {
-  if (from === to) return dayName(from, today);
-  const a = parseDateKey(from).toLocaleDateString('en-GB', {
-    day: 'numeric',
-    month: 'short',
-  });
-  const b = parseDateKey(to).toLocaleDateString('en-GB', {
-    day: 'numeric',
-    month: 'short',
-    year: from.slice(0, 4) === to.slice(0, 4) ? undefined : 'numeric',
-  });
-  return `${a} – ${b}`;
-}
-
 export default function ProfitPage() {
   const today = businessDateKey(new Date().toISOString());
-  const [from, setFrom] = useState(today);
-  const [to, setTo] = useState(today);
+  const period = usePeriodRange(today);
+  const { mode, from, to, label, canGoForward, showCustom, presets, pickers, shiftRange, setFromDate, setToDate } =
+    period;
   const [report, setReport] = useState(null);
   const [currency, setCurrency] = useState('MYR');
   const [expenses, setExpenses] = useState([]);
+  const [closedWeekdays, setClosedWeekdays] = useState(() => closedWeekdaysFromHours(null));
   const [people, setPeople] = useState({ punches: [], staff: [] });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
@@ -161,11 +138,12 @@ export default function ProfitPage() {
 
   useEffect(() => {
     let alive = true;
-    Promise.all([api.posGetSettings(), loadExpenses()])
-      .then(([s, ex]) => {
+    Promise.all([api.posGetSettings(), loadExpenses(), api.getHours().catch(() => [])])
+      .then(([s, ex, hours]) => {
         if (!alive) return;
         setCurrency(s?.currency || 'MYR');
         setExpenses(ex.expenses || []);
+        setClosedWeekdays(closedWeekdaysFromHours(hours));
       })
       .catch((err) => alive && setError(err.message));
     return () => {
@@ -197,8 +175,11 @@ export default function ProfitPage() {
   }, [from, to]);
 
   const overhead = useMemo(
-    () => overheadByDate(expenses, from, to),
-    [expenses, from, to]
+    () =>
+      overheadByDate(expenses, from, to, closedWeekdays, {
+        fixedMonthly: mode === 'month',
+      }),
+    [expenses, from, to, closedWeekdays, mode]
   );
 
   const salary = useMemo(() => salaryByDate(people, from, to), [people, from, to]);
@@ -211,14 +192,30 @@ export default function ProfitPage() {
   const hasRealWater = (overhead.byCategory?.water || 0) > 0;
   const electricEstimate = useMemo(
     () =>
-      hasRealElectric ? 0 : monthlyEstimateForRange(ELECTRIC_ESTIMATE_MONTHLY, from, to),
-    [hasRealElectric, from, to]
+      hasRealElectric
+        ? 0
+        : monthlyEstimateForRange(ELECTRIC_ESTIMATE_MONTHLY, from, to, closedWeekdays),
+    [hasRealElectric, from, to, closedWeekdays]
   );
   const waterEstimate = useMemo(
-    () => (hasRealWater ? 0 : monthlyEstimateForRange(WATER_ESTIMATE_MONTHLY, from, to)),
-    [hasRealWater, from, to]
+    () =>
+      hasRealWater
+        ? 0
+        : monthlyEstimateForRange(WATER_ESTIMATE_MONTHLY, from, to, closedWeekdays),
+    [hasRealWater, from, to, closedWeekdays]
   );
   const net = round2(gross - overhead.total - salary.total - electricEstimate - waterEstimate);
+  const rangeAllClosed = useMemo(() => {
+    for (let key = from; key <= to; key = addDays(key, 1)) {
+      if (isOpenDateKey(key, closedWeekdays)) return false;
+    }
+    return true;
+  }, [from, to, closedWeekdays]);
+  const closedDayLabel = useMemo(() => {
+    if (!rangeAllClosed) return '';
+    if (from === to) return DAY_LABELS[parseDateKey(from).getDay()] || 'This day';
+    return 'These days';
+  }, [rangeAllClosed, from, to]);
   const { otherOverheads, utilityItems, utilityTotal } = useMemo(() => {
     const lines = Object.values(overhead.byExpense || {}).sort(
       (a, b) => b.total - a.total || a.name.localeCompare(b.name)
@@ -238,10 +235,10 @@ export default function ProfitPage() {
         kind: 'estimate',
         amount: ELECTRIC_ESTIMATE_MONTHLY,
         total: electricEstimate,
-        tip: `Estimated MYR ${ELECTRIC_ESTIMATE_MONTHLY}/mo ≈ ${formatMoney(
+        tip: `Estimated MYR ${ELECTRIC_ESTIMATE_MONTHLY}/mo ÷ open days ≈ ${formatMoney(
           electricEstimate / days,
           currency
-        )}/day × ${days}. Add a real electricity overhead to replace this estimate.`,
+        )}/open day × ${days} (closed days skipped). Add a real electricity overhead to replace this estimate.`,
       });
     }
     if (waterEstimate > 0) {
@@ -252,10 +249,10 @@ export default function ProfitPage() {
         kind: 'estimate',
         amount: WATER_ESTIMATE_MONTHLY,
         total: waterEstimate,
-        tip: `Estimated MYR ${WATER_ESTIMATE_MONTHLY}/mo ≈ ${formatMoney(
+        tip: `Estimated MYR ${WATER_ESTIMATE_MONTHLY}/mo ÷ open days ≈ ${formatMoney(
           waterEstimate / days,
           currency
-        )}/day × ${days}. Add a real water overhead to replace this estimate.`,
+        )}/open day × ${days} (closed days skipped). Add a real water overhead to replace this estimate.`,
       });
     }
     utility.sort((a, b) => b.total - a.total || a.name.localeCompare(b.name));
@@ -265,41 +262,6 @@ export default function ProfitPage() {
       utilityTotal: round2(utility.reduce((s, l) => s + l.total, 0)),
     };
   }, [overhead, electricEstimate, waterEstimate, currency]);
-
-  const activePreset = [1, 7, 30, 90].find((n) => to === today && from === addDays(today, -(n - 1)));
-  const singleDay = from === to;
-  const canGoForward = (singleDay ? from : to) < today;
-  const label = rangeLabel(from, to, today);
-
-  function preset(n) {
-    setTo(today);
-    setFrom(addDays(today, -(n - 1)));
-  }
-
-  function shiftDay(delta) {
-    if (singleDay) {
-      const next = addDays(from, delta);
-      if (next > today) return;
-      setFrom(next);
-      setTo(next);
-      return;
-    }
-    const nextTo = addDays(to, delta);
-    if (nextTo > today) return;
-    const span = Math.round((parseDateKey(to) - parseDateKey(from)) / 86400000);
-    setTo(nextTo);
-    setFrom(addDays(nextTo, -span));
-  }
-
-  function setFromDate(value) {
-    setFrom(value);
-    if (value > to) setTo(value);
-  }
-
-  function setToDate(value) {
-    setTo(value);
-    if (value < from) setFrom(value);
-  }
 
   return (
     <div>
@@ -323,61 +285,24 @@ export default function ProfitPage() {
             ''
           )}
         </p>
-        <div className="pos-day-nav">
-          <button
-            type="button"
-            className="pos-btn ghost"
-            aria-label="Previous day"
-            onClick={() => shiftDay(-1)}
-          >
-            ←
-          </button>
-          <button
-            type="button"
-            className="pos-btn ghost"
-            aria-label="Next day"
-            disabled={!canGoForward}
-            onClick={() => shiftDay(1)}
-          >
-            →
-          </button>
-          {[1, 7, 30, 90].map((n) => (
-            <button
-              key={n}
-              type="button"
-              className={`pos-btn ${activePreset === n ? 'primary' : 'ghost'}`}
-              aria-pressed={activePreset === n}
-              onClick={() => preset(n)}
-            >
-              {n === 1 ? 'Today' : `${n}d`}
-            </button>
-          ))}
-        </div>
+        <PeriodRangeNav
+          mode={mode}
+          presets={presets}
+          pickers={pickers}
+          shiftRange={shiftRange}
+          canGoForward={canGoForward}
+        />
       </div>
 
-      <div className="pos-range" style={{ marginBottom: '0.85rem' }}>
-        <label className="pos-field">
-          <span className="pos-cart-label">From</span>
-          <input
-            type="date"
-            className="pos-input"
-            value={from}
-            max={to}
-            onChange={(e) => e.target.value && setFromDate(e.target.value)}
-          />
-        </label>
-        <label className="pos-field">
-          <span className="pos-cart-label">To</span>
-          <input
-            type="date"
-            className="pos-input"
-            value={to}
-            min={from}
-            max={today}
-            onChange={(e) => e.target.value && setToDate(e.target.value)}
-          />
-        </label>
-      </div>
+      {showCustom && (
+        <PeriodCustomRange
+          from={from}
+          to={to}
+          today={today}
+          setFromDate={setFromDate}
+          setToDate={setToDate}
+        />
+      )}
 
       {error && <div className="pos-alert error">{error}</div>}
 
@@ -437,7 +362,9 @@ export default function ProfitPage() {
                   <div key={line.id} className="minus">
                     <span className="pos-pnl-label">
                       {line.name}
-                      <InfoTip text={overheadLineTip(line, currency, daysInRange)} />
+                      <InfoTip
+                        text={overheadLineTip(line, currency, daysInRange, overhead.fixedMonthly)}
+                      />
                     </span>
                     <span>− {formatMoney(line.total, currency)}</span>
                   </div>
@@ -472,7 +399,14 @@ export default function ProfitPage() {
                         <div key={line.id} className="minus sub">
                           <span className="pos-pnl-label">
                             {line.name}
-                            <InfoTip text={overheadLineTip(line, currency, daysInRange)} />
+                            <InfoTip
+                              text={overheadLineTip(
+                                line,
+                                currency,
+                                daysInRange,
+                                overhead.fixedMonthly
+                              )}
+                            />
                           </span>
                           <span>− {formatMoney(line.total, currency)}</span>
                         </div>
@@ -486,11 +420,18 @@ export default function ProfitPage() {
                   </span>
                 </div>
               </div>
-              {overhead.total === 0 && (
+              {rangeAllClosed ? (
                 <p className="pos-meta" style={{ marginTop: '0.75rem', marginBottom: 0 }}>
-                  No overheads yet. Add rent and electricity in{' '}
-                  <Link to="/ordering/overheads">Overheads</Link> for a true net.
+                  {closedDayLabel} closed — rent and utilities are charged on open days only.
                 </p>
+              ) : (
+                overhead.total === 0 &&
+                expenses.length === 0 && (
+                  <p className="pos-meta" style={{ marginTop: '0.75rem', marginBottom: 0 }}>
+                    No overheads yet. Add rent and electricity in{' '}
+                    <Link to="/ordering/overheads">Overheads</Link> for a true net.
+                  </p>
+                )
               )}
             </div>
 
@@ -504,38 +445,62 @@ export default function ProfitPage() {
             <div className="pos-card" style={{ overflowX: 'auto' }}>
               <h2 style={{ marginTop: 0, fontSize: '1.05rem' }}>Sold – {label}</h2>
               {report.products.length ? (
-                <table className="pos-table stack">
-                  <thead>
-                    <tr>
-                      <th>Product</th>
-                      <th>Qty</th>
-                      <th>Sales</th>
-                      <th>Cost</th>
-                      <th>Profit</th>
-                      <th>Margin</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {report.products.map((p) => (
-                      <tr key={p.product_name}>
-                        <td className="pos-cell-title">
-                          <strong>{p.product_name}</strong>
-                        </td>
-                        <td data-label="Qty">{p.quantity}</td>
-                        <td data-label="Sales">{formatMoney(p.sales, currency)}</td>
-                        <td data-label="Cost">{formatMoney(p.cost, currency)}</td>
-                        <td data-label="Profit">
-                          <span className={p.profit < 0 ? 'pos-neg' : ''}>
-                            {formatMoney(p.profit, currency)}
+                <>
+                  {[
+                    ['kitchen', 'Kitchen'],
+                    ['barista', 'Barista'],
+                  ].map(([station, title]) => {
+                    const rows = report.products.filter(
+                      (p) => (p.station || 'kitchen') === station
+                    );
+                    if (!rows.length) return null;
+                    const salesSum = rows.reduce((s, p) => s + Number(p.sales || 0), 0);
+                    const profitSum = rows.reduce((s, p) => s + Number(p.profit || 0), 0);
+                    return (
+                      <div key={station} className="pos-sold-station">
+                        <div className="pos-sold-station-head">
+                          <h3>{title}</h3>
+                          <span className="pos-meta">
+                            {formatMoney(salesSum, currency)} sales ·{' '}
+                            {formatMoney(profitSum, currency)} profit
                           </span>
-                        </td>
-                        <td data-label="Margin">
-                          <Margin value={p.margin} />
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                        </div>
+                        <table className="pos-table stack">
+                          <thead>
+                            <tr>
+                              <th>Product</th>
+                              <th>Qty</th>
+                              <th>Sales</th>
+                              <th>Cost</th>
+                              <th>Profit</th>
+                              <th>Margin</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {rows.map((p) => (
+                              <tr key={`${station}-${p.product_name}`}>
+                                <td className="pos-cell-title">
+                                  <strong>{p.product_name}</strong>
+                                </td>
+                                <td data-label="Qty">{p.quantity}</td>
+                                <td data-label="Sales">{formatMoney(p.sales, currency)}</td>
+                                <td data-label="Cost">{formatMoney(p.cost, currency)}</td>
+                                <td data-label="Profit">
+                                  <span className={p.profit < 0 ? 'pos-neg' : ''}>
+                                    {formatMoney(p.profit, currency)}
+                                  </span>
+                                </td>
+                                <td data-label="Margin">
+                                  <Margin value={p.margin} />
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    );
+                  })}
+                </>
               ) : (
                 <p className="pos-meta">No paid orders in this period.</p>
               )}

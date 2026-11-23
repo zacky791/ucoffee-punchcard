@@ -1,32 +1,50 @@
 import { useEffect, useState } from 'react';
 import { api } from '../../api';
+import PeriodRangeNav, { PeriodCustomRange } from '../../components/PeriodRangeNav';
 import { formatMoney } from '../../context/CartContext';
 import { printFromResult } from '../../lib/receiptPrinter';
 import PinPrompt from '../../components/PinPrompt';
-import { kindOf } from '../../lib/menuKind';
+import { isHourlyProduct, kindOf } from '../../lib/menuKind';
 import {
-  addDays,
   businessDateKey,
   businessDayRange,
-  parseDateKey,
 } from '../../lib/performance';
+import { usePeriodRange } from '../../lib/periodRange';
 
 export default function OrdersPage() {
   const today = businessDateKey(new Date().toISOString());
+  const period = usePeriodRange(today);
+  const {
+    mode,
+    from,
+    to,
+    label,
+    canGoForward,
+    showCustom,
+    presets,
+    pickers,
+    shiftRange,
+    setFromDate,
+    setToDate,
+  } = period;
   const [orders, setOrders] = useState([]);
   const [settings, setSettings] = useState(null);
-  const [date, setDate] = useState(today);
   const [selected, setSelected] = useState(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
+  const [pinForAdd, setPinForAdd] = useState(false);
+  const [manualOpen, setManualOpen] = useState(false);
 
-  async function load(day = date) {
+  async function load(fromKey = from, toKey = to) {
     setLoading(true);
     setError('');
     try {
-      const range = businessDayRange(day);
       const [list, sett] = await Promise.all([
-        api.posGetOrders({ from: range.from, to: range.to, limit: 200 }),
+        api.posGetOrders({
+          from: businessDayRange(fromKey).from,
+          to: businessDayRange(toKey).to,
+          limit: 500,
+        }),
         api.posGetSettings(),
       ]);
       setOrders(list || []);
@@ -39,18 +57,11 @@ export default function OrdersPage() {
   }
 
   useEffect(() => {
-    load(date);
+    load(from, to);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [date]);
+  }, [from, to]);
 
   const currency = settings?.currency || 'MYR';
-  const isToday = date === today;
-  const dayLabel = parseDateKey(date).toLocaleDateString('en-GB', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  });
   const dayTotal = orders
     .filter((o) => o.status !== 'cancelled')
     .reduce((s, o) => s + Number(o.grand_total || 0), 0);
@@ -67,51 +78,75 @@ export default function OrdersPage() {
   return (
     <div>
       <div className="pos-page-head">
-        <div>
-          <h1>Orders</h1>
-        </div>
+        <h1>Orders</h1>
+        <button
+          type="button"
+          className="pos-icon-btn"
+          aria-label="Add missed order"
+          title="Add missed order"
+          onClick={() => setPinForAdd(true)}
+        >
+          <PlusIcon />
+        </button>
       </div>
 
       {error && <div className="pos-alert error">{error}</div>}
 
+      {pinForAdd && (
+        <div className="pos-modal-backdrop" onClick={() => setPinForAdd(false)}>
+          <div className="pos-modal" onClick={(e) => e.stopPropagation()}>
+            <h2>Add missed order</h2>
+            <PinPrompt
+              title="Staff PIN required"
+              onCancel={() => setPinForAdd(false)}
+              onUnlock={() => {
+                setPinForAdd(false);
+                setManualOpen(true);
+              }}
+            />
+          </div>
+        </div>
+      )}
+
+      {manualOpen && (
+        <ManualOrderModal
+          currency={currency}
+          defaultDate={to}
+          maxDate={today}
+          onCancel={() => setManualOpen(false)}
+          onSaved={async (savedDate) => {
+            setManualOpen(false);
+            const day = savedDate || to;
+            period.setMode('day');
+            period.setFrom(day);
+            period.setTo(day);
+          }}
+        />
+      )}
+
       <div className="pos-report-bar">
         <p className="pos-meta">
-          {dayLabel}
+          {label}
           {!loading && ` · ${orders.length} order(s) · ${formatMoney(dayTotal, currency)}`}
         </p>
-        <div className="pos-day-nav">
-          <button
-            type="button"
-            className="pos-btn ghost"
-            aria-label="Previous day"
-            onClick={() => setDate(addDays(date, -1))}
-          >
-            ←
-          </button>
-          <input
-            type="date"
-            className="pos-input"
-            value={date}
-            max={today}
-            onChange={(e) => e.target.value && setDate(e.target.value)}
-            aria-label="Order date"
-          />
-          <button
-            type="button"
-            className="pos-btn ghost"
-            aria-label="Next day"
-            disabled={isToday}
-            onClick={() => setDate(addDays(date, 1))}
-          >
-            →
-          </button>
-          {!isToday && (
-            <button type="button" className="pos-btn ghost" onClick={() => setDate(today)}>
-              Today
-            </button>
-          )}
-        </div>
+        <PeriodRangeNav
+          mode={mode}
+          presets={presets}
+          pickers={pickers}
+          shiftRange={shiftRange}
+          canGoForward={canGoForward}
+        />
       </div>
+
+      {showCustom && (
+        <PeriodCustomRange
+          from={from}
+          to={to}
+          today={today}
+          setFromDate={setFromDate}
+          setToDate={setToDate}
+        />
+      )}
 
       <div className="pos-card" style={{ overflowX: 'auto' }}>
         {loading ? (
@@ -203,6 +238,18 @@ export default function OrdersPage() {
   );
 }
 
+const PlusIcon = () => (
+  <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+    <path
+      d="M12 5v14M5 12h14"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.25"
+      strokeLinecap="round"
+    />
+  </svg>
+);
+
 const PencilIcon = () => (
   <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true">
     <path
@@ -272,19 +319,6 @@ export function OrderDetailModal({ order, currency, onClose, onUpdated, onDelete
       const res = await api.posReprint(order.id);
       const printed = await printFromResult(res.result);
       if (!printed.ok) onError(printed.message);
-      await onUpdated();
-    } catch (err) {
-      onError(err.message);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function cancel() {
-    if (!window.confirm('Cancel this order? Ingredients used will go back into inventory.')) return;
-    setBusy(true);
-    try {
-      await api.posCancelOrder(order.id, { reason: 'Cancelled from Orders page' });
       await onUpdated();
     } catch (err) {
       onError(err.message);
@@ -406,35 +440,20 @@ export function OrderDetailModal({ order, currency, onClose, onUpdated, onDelete
             <span>Subtotal</span>
             <span>{formatMoney(order.subtotal, currency)}</span>
           </div>
-          <div>
-            <span>Discount</span>
-            <span>-{formatMoney(order.discount, currency)}</span>
-          </div>
+          {Number(order.discount) > 0 && (
+            <div>
+              <span>Discount</span>
+              <span>-{formatMoney(order.discount, currency)}</span>
+            </div>
+          )}
           <div className="grand">
             <span>Grand total</span>
             <span>{formatMoney(order.grand_total, currency)}</span>
           </div>
           {order.payment && (
-            <>
-              <div>
-                <span>Paid via</span>
-                <span>{order.payment.method === 'qr' ? 'QR' : order.payment.method}</span>
-              </div>
-              <div>
-                <span>Received / change</span>
-                <span>
-                  {formatMoney(order.payment.amount_received, currency)} /{' '}
-                  {formatMoney(order.payment.change_due, currency)}
-                </span>
-              </div>
-            </>
-          )}
-          {order.receipt && (
             <div>
-              <span>Receipt</span>
-              <span>
-                {order.receipt.receipt_number} · {order.receipt.print_status}
-              </span>
+              <span>Paid via</span>
+              <span>{order.payment.method === 'qr' ? 'QR' : order.payment.method}</span>
             </div>
           )}
         </div>
@@ -453,21 +472,6 @@ export function OrderDetailModal({ order, currency, onClose, onUpdated, onDelete
               Mark ready
             </button>
           )}
-          {['paid', 'preparing', 'ready'].includes(order.status) && (
-            <button
-              type="button"
-              className="pos-btn primary"
-              disabled={busy}
-              onClick={() => setStatus('completed')}
-            >
-              Complete
-            </button>
-          )}
-          {order.status !== 'cancelled' && order.status !== 'completed' && (
-            <button type="button" className="pos-btn danger" disabled={busy} onClick={cancel}>
-              Cancel order
-            </button>
-          )}
         </div>
       </div>
     </div>
@@ -475,6 +479,313 @@ export function OrderDetailModal({ order, currency, onClose, onUpdated, onDelete
 }
 
 const PAYMENT_METHODS = ['qr', 'cash', 'card', 'ewallet', 'other'];
+
+function ManualOrderModal({ currency, defaultDate, maxDate, onCancel, onSaved }) {
+  const [orderDate, setOrderDate] = useState(defaultDate);
+  const [items, setItems] = useState([]);
+  const [orderType, setOrderType] = useState('dine_in');
+  const [table, setTable] = useState('');
+  const [notes, setNotes] = useState('Manual entry — missed order');
+  const [discount, setDiscount] = useState('0');
+  const [method, setMethod] = useState('qr');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [products, setProducts] = useState(null);
+  const [pickerOpen, setPickerOpen] = useState(true);
+  const [search, setSearch] = useState('');
+
+  useEffect(() => {
+    api
+      .posGetProducts({ active: 'true' })
+      .then((list) => setProducts(list || []))
+      .catch(() => setProducts([]));
+  }, []);
+
+  const subtotal = items.reduce((s, a) => s + a.price * a.quantity, 0);
+  const total = Math.max(0, subtotal - (Number(discount) || 0));
+  const itemCount = items.reduce((s, a) => s + a.quantity, 0);
+  const matches = (products || []).filter((p) =>
+    p.name.toLowerCase().includes(search.trim().toLowerCase())
+  );
+
+  function addProduct(product) {
+    const hourly = isHourlyProduct(product);
+    const temp = !hourly && kindOf(product) === 'drink' ? 'cold' : null;
+    setItems((list) => {
+      const twin = list.find(
+        (a) => a.product_id === product.id && a.temp === temp && Boolean(a.unit) === hourly
+      );
+      if (twin) {
+        return list.map((a) => (a === twin ? { ...a, quantity: a.quantity + 1 } : a));
+      }
+      return [
+        ...list,
+        {
+          key: `${product.id}-${Date.now()}`,
+          product_id: product.id,
+          name: product.name,
+          sku: product.sku || null,
+          price: Number(product.base_price) || 0,
+          quantity: 1,
+          temp,
+          unit: hourly ? 'hour' : null,
+        },
+      ];
+    });
+    setPickerOpen(false);
+    setSearch('');
+  }
+
+  function changeItem(key, patch) {
+    setItems((list) =>
+      list
+        .map((a) => {
+          if (a.key !== key) return a;
+          const next = { ...a, ...patch };
+          if (a.unit === 'hour') next.quantity = Math.max(1, Number(next.quantity) || 1);
+          return next;
+        })
+        .filter((a) => a.quantity > 0)
+    );
+  }
+
+  async function save() {
+    if (!items.length) {
+      setError('Add at least one item.');
+      return;
+    }
+    setBusy(true);
+    setError('');
+    try {
+      await api.posCheckout({
+        items: items.map((a) => {
+          const modifiers = [];
+          if (a.unit === 'hour') {
+            const hours = Math.max(1, a.quantity);
+            return {
+              product_id: a.product_id,
+              product_name: a.name,
+              sku: a.sku,
+              quantity: 1,
+              base_price: a.price,
+              unit_price: a.price * hours,
+              modifiers: [{ name: `${hours} hour${hours === 1 ? '' : 's'}`, price_delta: 0 }],
+            };
+          }
+          if (a.temp) modifiers.push({ name: a.temp === 'hot' ? 'Hot' : 'Cold', price_delta: 0 });
+          return {
+            product_id: a.product_id,
+            product_name: a.name,
+            sku: a.sku,
+            quantity: a.quantity,
+            base_price: a.price,
+            unit_price: a.price,
+            modifiers,
+          };
+        }),
+        order_type: orderType,
+        table_label: orderType === 'dine_in' ? table || null : null,
+        notes: notes || null,
+        discount: Number(discount) || 0,
+        payment_method: method,
+        amount_received: total,
+        cashier_name: 'Manual entry',
+        business_date: orderDate,
+      });
+      await onSaved(orderDate);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="pos-modal-backdrop" onClick={busy ? undefined : onCancel}>
+      <div className="pos-modal wide" onClick={(e) => e.stopPropagation()}>
+        <h2>Add missed order</h2>
+        <p className="hint">Key in items that were sold but not recorded. Saves as a paid order.</p>
+        {error && <div className="pos-alert error">{error}</div>}
+
+        <div className="pos-edit-grid" style={{ marginBottom: '0.75rem' }}>
+          <label className="pos-field">
+            <span className="pos-cart-label">Order date</span>
+            <input
+              type="date"
+              className="pos-input"
+              value={orderDate}
+              max={maxDate}
+              onChange={(e) => e.target.value && setOrderDate(e.target.value)}
+            />
+          </label>
+        </div>
+
+        <ul className="pos-list pos-edit-items">
+          {items.length === 0 && (
+            <li className="pos-product-meta">No items yet — add from the menu below.</li>
+          )}
+          {items.map((a) => (
+            <li key={a.key} className="added">
+              <span>
+                <strong>{a.name}</strong>
+                <small className="pos-product-meta" style={{ display: 'block' }}>
+                  {formatMoney(a.price * a.quantity, currency)}
+                  {a.unit === 'hour' ? ` · ${a.quantity} hr` : ''}
+                </small>
+              </span>
+              <span className="pos-edit-controls">
+                {a.temp && (
+                  <div className="pos-temp" role="group" aria-label="Temperature">
+                    {[
+                      ['hot', 'Hot'],
+                      ['cold', 'Cold'],
+                    ].map(([value, label]) => (
+                      <button
+                        key={value}
+                        type="button"
+                        className={`${value} ${a.temp === value ? 'active' : ''}`}
+                        aria-pressed={a.temp === value}
+                        onClick={() => changeItem(a.key, { temp: value })}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <span className="pos-qty" style={{ marginTop: 0 }}>
+                  <button
+                    type="button"
+                    disabled={a.unit === 'hour' && a.quantity <= 1}
+                    onClick={() =>
+                      changeItem(a.key, {
+                        quantity: a.unit === 'hour' ? Math.max(1, a.quantity - 1) : a.quantity - 1,
+                      })
+                    }
+                  >
+                    −
+                  </button>
+                  <span>
+                    {a.quantity}
+                    {a.unit === 'hour' ? (a.quantity === 1 ? ' hr' : ' hrs') : ''}
+                  </span>
+                  <button type="button" onClick={() => changeItem(a.key, { quantity: a.quantity + 1 })}>
+                    +
+                  </button>
+                </span>
+                <button
+                  type="button"
+                  className="pos-trash"
+                  aria-label={`Delete ${a.name}`}
+                  onClick={() => changeItem(a.key, { quantity: 0 })}
+                >
+                  <TrashIcon />
+                </button>
+              </span>
+            </li>
+          ))}
+        </ul>
+
+        {pickerOpen ? (
+          <div className="pos-cat-picker">
+            <div className="pos-cat-picker-head">
+              <input
+                className="pos-input"
+                autoFocus
+                placeholder="Search food or drinks"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+              <button type="button" className="pos-btn ghost" onClick={() => setPickerOpen(false)}>
+                Close
+              </button>
+            </div>
+            <ul className="pos-edit-pick-list">
+              {products === null && <li className="pos-product-meta">Loading menu…</li>}
+              {products !== null && matches.length === 0 && (
+                <li className="pos-product-meta">No items match.</li>
+              )}
+              {matches.map((p) => (
+                <li key={p.id}>
+                  <button type="button" onClick={() => addProduct(p)}>
+                    <span>{p.name}</span>
+                    <span className="pos-product-meta">{formatMoney(p.base_price, currency)}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : (
+          <button type="button" className="pos-cat-add-btn" onClick={() => setPickerOpen(true)}>
+            + Add item
+          </button>
+        )}
+
+        <div className="pos-edit-grid">
+          <label className="pos-field">
+            <span className="pos-cart-label">Order type</span>
+            <select className="pos-select" value={orderType} onChange={(e) => setOrderType(e.target.value)}>
+              <option value="dine_in">Dine-in</option>
+              <option value="takeaway">Takeaway</option>
+              <option value="delivery">Delivery</option>
+            </select>
+          </label>
+          {orderType === 'dine_in' && (
+            <label className="pos-field">
+              <span className="pos-cart-label">Table</span>
+              <input className="pos-input" value={table} onChange={(e) => setTable(e.target.value)} />
+            </label>
+          )}
+          <label className="pos-field">
+            <span className="pos-cart-label">Payment</span>
+            <select className="pos-select" value={method} onChange={(e) => setMethod(e.target.value)}>
+              {PAYMENT_METHODS.map((m) => (
+                <option key={m} value={m}>
+                  {m === 'qr' ? 'QR' : m.charAt(0).toUpperCase() + m.slice(1)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="pos-field">
+            <span className="pos-cart-label">Discount ({currency})</span>
+            <input
+              className="pos-input"
+              type="number"
+              min="0"
+              step="0.01"
+              value={discount}
+              onChange={(e) => setDiscount(e.target.value)}
+            />
+          </label>
+          <label className="pos-field full">
+            <span className="pos-cart-label">Order notes</span>
+            <input className="pos-input" value={notes} onChange={(e) => setNotes(e.target.value)} />
+          </label>
+        </div>
+
+        <div className="pos-totals" style={{ marginTop: '0.75rem' }}>
+          <div className="grand">
+            <span>Total</span>
+            <span>{formatMoney(total, currency)}</span>
+          </div>
+        </div>
+
+        <div className="pos-modal-actions">
+          <button type="button" className="pos-btn ghost" disabled={busy} onClick={onCancel}>
+            Cancel
+          </button>
+          <button
+            type="button"
+            className="pos-btn primary"
+            disabled={busy || itemCount === 0}
+            onClick={save}
+          >
+            {busy ? 'Saving…' : 'Save paid order'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function OrderEditModal({ order, currency, onCancel, onSaved }) {
   const [qty, setQty] = useState(() =>

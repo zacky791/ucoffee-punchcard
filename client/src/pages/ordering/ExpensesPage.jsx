@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../../api';
+import PeriodRangeNav, { PeriodCustomRange } from '../../components/PeriodRangeNav';
 import { formatMoney } from '../../context/CartContext';
 import Toast from '../../components/Toast';
-import { addDays, businessDateKey, parseDateKey } from '../../lib/performance';
+import { businessDateKey } from '../../lib/performance';
+import { usePeriodRange } from '../../lib/periodRange';
 import { restockList } from '../../lib/restock';
 
 function fmtQty(n) {
@@ -14,8 +16,21 @@ const round2 = (n) => Math.round(n * 100) / 100;
 
 export default function ExpensesPage() {
   const today = businessDateKey(new Date().toISOString());
+  const period = usePeriodRange(today);
+  const {
+    mode,
+    from,
+    to,
+    label,
+    canGoForward,
+    showCustom,
+    presets,
+    pickers,
+    shiftRange,
+    setFromDate,
+    setToDate,
+  } = period;
   const navigate = useNavigate();
-  const [date, setDate] = useState(today);
   const [purchases, setPurchases] = useState([]);
   const [inventory, setInventory] = useState([]);
   const [currency, setCurrency] = useState('MYR');
@@ -26,7 +41,7 @@ export default function ExpensesPage() {
 
   const load = useCallback(async () => {
     const [list, inv, settings] = await Promise.all([
-      api.posGetPurchases({ from: date, to: date }).catch((err) => err),
+      api.posGetPurchases({ from, to }).catch((err) => err),
       api.posGetInventory().catch(() => []),
       api.posGetSettings().catch(() => null),
     ]);
@@ -44,7 +59,7 @@ export default function ExpensesPage() {
       setError('');
     }
     setLoading(false);
-  }, [date]);
+  }, [from, to]);
 
   useEffect(() => {
     setLoading(true);
@@ -64,13 +79,8 @@ export default function ExpensesPage() {
   );
   const lowStock = useMemo(() => restockList(inventory), [inventory]);
 
-  const isToday = date === today;
-  const dayLabel = parseDateKey(date).toLocaleDateString('en-GB', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  });
+  const singleDay = from === to;
+  const isToday = singleDay && from === today;
 
   async function remove(p) {
     const stockNote = p.stock_movement_id
@@ -102,46 +112,31 @@ export default function ExpensesPage() {
       </div>
 
       <div className="pos-report-bar">
-        <p className="pos-meta">Bought on {dayLabel}</p>
-        <div className="pos-day-nav">
-          <button
-            type="button"
-            className="pos-btn ghost"
-            aria-label="Previous day"
-            onClick={() => setDate(addDays(date, -1))}
-          >
-            ←
-          </button>
-          <input
-            type="date"
-            className="pos-input"
-            value={date}
-            max={today}
-            onChange={(e) => e.target.value && setDate(e.target.value)}
-            aria-label="Restock date"
-          />
-          <button
-            type="button"
-            className="pos-btn ghost"
-            aria-label="Next day"
-            disabled={isToday}
-            onClick={() => setDate(addDays(date, 1))}
-          >
-            →
-          </button>
-          {!isToday && (
-            <button type="button" className="pos-btn ghost" onClick={() => setDate(today)}>
-              Today
-            </button>
-          )}
-        </div>
+        <p className="pos-meta">Bought · {label}</p>
+        <PeriodRangeNav
+          mode={mode}
+          presets={presets}
+          pickers={pickers}
+          shiftRange={shiftRange}
+          canGoForward={canGoForward}
+        />
       </div>
+
+      {showCustom && (
+        <PeriodCustomRange
+          from={from}
+          to={to}
+          today={today}
+          setFromDate={setFromDate}
+          setToDate={setToDate}
+        />
+      )}
 
       {error && <div className="pos-alert error">{error}</div>}
 
       <div className="pos-grid-stats">
         <div className="pos-card pos-stat">
-          <span>{isToday ? 'Spent today' : 'Spent this day'}</span>
+          <span>{isToday ? 'Spent today' : singleDay ? 'Spent this day' : 'Spent in period'}</span>
           <strong>{formatMoney(total, currency)}</strong>
         </div>
         <div className="pos-card pos-stat">
@@ -171,7 +166,7 @@ export default function ExpensesPage() {
                     inventory_item_id: i.id,
                     ...(i.packs ? { packs: i.packs } : { quantity: i.need }),
                     ...(i.cost ? { amount: i.cost } : {}),
-                    purchase_date: date,
+                    purchase_date: to,
                   })
                 }
               >
@@ -187,7 +182,7 @@ export default function ExpensesPage() {
 
       <div className="pos-card" style={{ overflowX: 'auto' }}>
         <h2 className="pos-card-title">
-          Today’s list
+          {singleDay ? (isToday ? 'Today’s list' : 'Day list') : 'Period list'}
           {purchases.length > 0 && <small> · {purchases.length} item(s)</small>}
         </h2>
         <table className="pos-table stack">
@@ -227,9 +222,9 @@ export default function ExpensesPage() {
                 </td>
               </tr>
             ))}
-            {!loading && !purchases.length && (
+              {!loading && !purchases.length && (
               <tr>
-                <td colSpan={4}>Nothing recorded for this day.</td>
+                <td colSpan={4}>Nothing recorded for this period.</td>
               </tr>
             )}
           </tbody>

@@ -247,7 +247,7 @@ function InventoryCard({ item, onEdit }) {
     >
       <div className="pos-inv-card-media">
         {item.image_url ? (
-          <img src={item.image_url} alt="" loading="lazy" />
+          <img src={item.image_url} alt="" loading="eager" decoding="async" />
         ) : (
           <span className="pos-inv-card-placeholder" aria-hidden="true" />
         )}

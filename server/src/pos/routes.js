@@ -151,12 +151,12 @@ function createPosRouter(getSupabase) {
     });
   }
 
-  async function allocateOrderNumber(db, settings) {
+  async function allocateOrderNumber(db, settings, when = new Date()) {
     const prefix = settings.order_prefix || 'UC';
-    const today = new Date();
-    const y = today.getFullYear();
-    const m = String(today.getMonth() + 1).padStart(2, '0');
-    const d = String(today.getDate()).padStart(2, '0');
+    const at = when instanceof Date ? when : new Date(when);
+    const y = at.getFullYear();
+    const m = String(at.getMonth() + 1).padStart(2, '0');
+    const d = String(at.getDate()).padStart(2, '0');
     const seq = Number(settings.next_order_seq || 1);
     const order_number = `${prefix}-${y}${m}${d}-${String(seq).padStart(4, '0')}`;
     await db
@@ -164,6 +164,17 @@ function createPosRouter(getSupabase) {
       .update({ next_order_seq: seq + 1, updated_at: new Date().toISOString() })
       .eq('id', 1);
     return order_number;
+  }
+
+  /** Noon local on YYYY-MM-DD so the order lands on that business day in reports. */
+  function soldAtFromBusinessDate(dateKey) {
+    const m = String(dateKey || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!m) return null;
+    const y = Number(m[1]);
+    const mo = Number(m[2]);
+    const d = Number(m[3]);
+    if (!y || mo < 1 || mo > 12 || d < 1 || d > 31) return null;
+    return new Date(y, mo - 1, d, 12, 0, 0, 0);
   }
 
   async function loadOrderBundle(db, orderId) {
@@ -689,8 +700,19 @@ function createPosRouter(getSupabase) {
       const change_due =
         method === 'cash' ? money(Math.max(0, amount_received - totals.grand_total)) : 0;
 
-      const order_number = await allocateOrderNumber(db, settings);
-      const now = new Date().toISOString();
+      const soldAt =
+        soldAtFromBusinessDate(body.business_date) ||
+        (body.sold_at ? new Date(body.sold_at) : null);
+      const nowDate = new Date();
+      if (soldAt && Number.isNaN(soldAt.getTime())) {
+        return res.status(400).json({ error: 'Invalid business_date' });
+      }
+      if (soldAt && soldAt.getTime() > nowDate.getTime() + 60_000) {
+        return res.status(400).json({ error: 'Cannot backdate to a future day' });
+      }
+      const when = soldAt && soldAt.getTime() <= nowDate.getTime() ? soldAt : nowDate;
+      const whenIso = when.toISOString();
+      const order_number = await allocateOrderNumber(db, settings, when);
 
       const { data: order, error: orderError } = await db
         .from('pos_orders')
@@ -703,8 +725,9 @@ function createPosRouter(getSupabase) {
           cashier_name: body.cashier_name || 'Cashier',
           notes: body.notes || null,
           ...totals,
-          paid_at: now,
-          updated_at: now,
+          created_at: whenIso,
+          paid_at: whenIso,
+          updated_at: nowDate.toISOString(),
         })
         .select('*')
         .single();
@@ -783,7 +806,7 @@ function createPosRouter(getSupabase) {
             receipt_text: hw.printResult?.receipt_text || null,
             drawer: hw.drawerResult,
           },
-          printed_at: printOk ? now : null,
+          printed_at: printOk ? nowDate.toISOString() : null,
         })
         .eq('id', receipt.id);
 
@@ -2411,6 +2434,24 @@ function createPosRouter(getSupabase) {
       const missing = items.filter((it) => needsLiveCost(it.unit_cost)).map((it) => it.product_id);
       const current = missing.length ? await loadProductCosts(req.supabase, missing) : {};
 
+      const productIds = [...new Set(items.map((it) => it.product_id).filter(Boolean))];
+      const stationByProductId = {};
+      if (productIds.length) {
+        const { data: prods, error: prodErr } = await req.supabase
+          .from('pos_products')
+          .select('id, category:pos_categories(kind, name)')
+          .in('id', productIds);
+        if (prodErr) throw prodErr;
+        for (const p of prods || []) {
+          const kind = p.category?.kind;
+          const name = p.category?.name || '';
+          const isDrink =
+            kind === 'drink' ||
+            (!kind && /coffee|matcha|tea|drink|juice|smoothie|latte|beverage|soda/i.test(name));
+          stationByProductId[p.id] = isDrink ? 'barista' : 'kitchen';
+        }
+      }
+
       const byProduct = {};
       let cost = 0;
       let estimated = 0;
@@ -2424,6 +2465,8 @@ function createPosRouter(getSupabase) {
         cost += lineCost;
         const row = (byProduct[it.product_name] ||= {
           product_name: it.product_name,
+          product_id: it.product_id || null,
+          station: stationByProductId[it.product_id] || 'kitchen',
           quantity: 0,
           sales: 0,
           cost: 0,
@@ -2431,6 +2474,10 @@ function createPosRouter(getSupabase) {
         row.quantity += Number(it.quantity);
         row.sales += Number(it.line_total);
         row.cost += lineCost;
+        if (!row.product_id && it.product_id) {
+          row.product_id = it.product_id;
+          row.station = stationByProductId[it.product_id] || row.station;
+        }
       }
 
       const sales = money(

@@ -11,7 +11,7 @@ import {
   parseDateKey,
 } from '../../lib/performance';
 import { calcPayRm, hourlyRateRm } from '../../lib/salary';
-import { loadExpenses, overheadByDate } from '../../lib/overhead';
+import { closedWeekdaysFromHours, loadExpenses, overheadByDate } from '../../lib/overhead';
 import { loadPurchaseTotal } from '../../lib/purchases';
 import ExpenseStats from '../../components/ExpenseStats';
 import PeriodReport from './PeriodReport';
@@ -64,6 +64,7 @@ function DailyReport() {
   const [report, setReport] = useState(null);
   const [people, setPeople] = useState({ punches: [], staff: [] });
   const [expenses, setExpenses] = useState([]);
+  const [closedWeekdays, setClosedWeekdays] = useState(() => closedWeekdaysFromHours(null));
   const [purchases, setPurchases] = useState(0);
   const [currency, setCurrency] = useState('MYR');
   const [loading, setLoading] = useState(true);
@@ -80,14 +81,16 @@ function DailyReport() {
       api.posGetSettings(),
       loadExpenses(),
       loadPurchaseTotal(date, date),
+      api.getHours().catch(() => []),
     ])
-      .then(([r, perf, settings, ex, bought]) => {
+      .then(([r, perf, settings, ex, bought, hours]) => {
         if (!alive) return;
         setReport(r);
         setPeople({ punches: perf.punches || [], staff: perf.staff || [] });
         setCurrency(settings?.currency || 'MYR');
         setExpenses(ex.expenses);
         setPurchases(bought);
+        setClosedWeekdays(closedWeekdaysFromHours(hours));
       })
       .catch((err) => alive && setError(err.message))
       .finally(() => alive && setLoading(false));
@@ -122,7 +125,10 @@ function DailyReport() {
   const sales = Number(report?.sales || 0);
   const cost = Number(report?.cost || 0);
   const gross = Number(report?.profit || 0);
-  const overhead = useMemo(() => overheadByDate(expenses, date, date), [expenses, date]);
+  const overhead = useMemo(
+    () => overheadByDate(expenses, date, date, closedWeekdays),
+    [expenses, date, closedWeekdays]
+  );
   const net = Math.round((gross - salary.total - overhead.total) * 100) / 100;
   const grossMargin = marginPct(gross, sales);
   const netMargin = marginPct(net, sales);

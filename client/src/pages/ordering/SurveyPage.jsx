@@ -1,25 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from '../../api';
+import PeriodRangeNav, { PeriodCustomRange } from '../../components/PeriodRangeNav';
 import Toast from '../../components/Toast';
-import { addDays, businessDateKey, businessDayRange } from '../../lib/performance';
+import { businessDateKey, businessDayRange } from '../../lib/performance';
+import { usePeriodRange } from '../../lib/periodRange';
 import { SURVEY_SOURCES, surveyErrorMessage, surveyLabel } from '../../lib/survey';
-
-const RANGES = [
-  { value: 'today', label: 'Today', days: 1 },
-  { value: '7d', label: 'Last 7 days', days: 7 },
-  { value: '30d', label: 'Last 30 days', days: 30 },
-  { value: 'all', label: 'All time', days: null },
-];
-
-function rangeParams(range) {
-  const days = RANGES.find((r) => r.value === range)?.days;
-  if (!days) return {};
-  const today = businessDateKey(new Date().toISOString());
-  return {
-    from: businessDayRange(addDays(today, -(days - 1))).from,
-    to: businessDayRange(today).to,
-  };
-}
 
 function fmtTime(iso) {
   return new Date(iso).toLocaleString('en-GB', {
@@ -31,7 +16,21 @@ function fmtTime(iso) {
 }
 
 export default function SurveyPage() {
-  const [range, setRange] = useState('7d');
+  const today = businessDateKey(new Date().toISOString());
+  const period = usePeriodRange(today, { initialMode: 'week' });
+  const {
+    mode,
+    from,
+    to,
+    label,
+    canGoForward,
+    showCustom,
+    presets,
+    pickers,
+    shiftRange,
+    setFromDate,
+    setToDate,
+  } = period;
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -40,7 +39,12 @@ export default function SurveyPage() {
 
   const load = useCallback(async () => {
     try {
-      setRows((await api.posGetSurvey(rangeParams(range))) || []);
+      setRows(
+        (await api.posGetSurvey({
+          from: businessDayRange(from).from,
+          to: businessDayRange(to).to,
+        })) || []
+      );
       setError('');
     } catch (err) {
       setRows([]);
@@ -48,7 +52,7 @@ export default function SurveyPage() {
     } finally {
       setLoading(false);
     }
-  }, [range]);
+  }, [from, to]);
 
   useEffect(() => {
     setLoading(true);
@@ -96,20 +100,26 @@ export default function SurveyPage() {
         </div>
       </div>
 
-      <div className="pos-segment" role="radiogroup" aria-label="Period" style={{ marginBottom: '1rem' }}>
-        {RANGES.map((r) => (
-          <button
-            key={r.value}
-            type="button"
-            role="radio"
-            aria-checked={range === r.value}
-            className={range === r.value ? 'active' : ''}
-            onClick={() => setRange(r.value)}
-          >
-            {r.label}
-          </button>
-        ))}
+      <div className="pos-report-bar">
+        <p className="pos-meta">{label}</p>
+        <PeriodRangeNav
+          mode={mode}
+          presets={presets}
+          pickers={pickers}
+          shiftRange={shiftRange}
+          canGoForward={canGoForward}
+        />
       </div>
+
+      {showCustom && (
+        <PeriodCustomRange
+          from={from}
+          to={to}
+          today={today}
+          setFromDate={setFromDate}
+          setToDate={setToDate}
+        />
+      )}
 
       {error && <div className="pos-alert error">{error}</div>}
 

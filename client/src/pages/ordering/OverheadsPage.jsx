@@ -8,6 +8,7 @@ import {
   EXPENSE_CATEGORIES,
   EXPENSE_KINDS,
   categoryLabel,
+  closedWeekdaysFromHours,
   kindLabel,
   overheadByDate,
 } from '../../lib/overhead';
@@ -213,6 +214,7 @@ export default function OverheadsPage() {
   const todayKey = businessDateKey(new Date().toISOString());
   const [month, setMonth] = useState(todayKey.slice(0, 7));
   const [expenses, setExpenses] = useState([]);
+  const [closedWeekdays, setClosedWeekdays] = useState(() => closedWeekdaysFromHours(null));
   const [currency, setCurrency] = useState('MYR');
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(null);
@@ -222,9 +224,14 @@ export default function OverheadsPage() {
 
   const load = useCallback(async () => {
     try {
-      const [list, settings] = await Promise.all([api.posGetExpenses(), api.posGetSettings()]);
+      const [list, settings, hours] = await Promise.all([
+        api.posGetExpenses(),
+        api.posGetSettings(),
+        api.getHours().catch(() => []),
+      ]);
       setExpenses(list || []);
       setCurrency(settings?.currency || 'MYR');
+      setClosedWeekdays(closedWeekdaysFromHours(hours));
       setError('');
     } catch (err) {
       setError(err.message);
@@ -238,16 +245,16 @@ export default function OverheadsPage() {
   }, [load]);
 
   const monthTotals = useMemo(
-    () => overheadByDate(expenses, `${month}-01`, lastDay(month)),
-    [expenses, month]
+    () => overheadByDate(expenses, `${month}-01`, lastDay(month), closedWeekdays),
+    [expenses, month, closedWeekdays]
   );
 
   const monthShare = useCallback(
-    (e) => overheadByDate([e], `${month}-01`, lastDay(month)).total,
-    [month]
+    (e) => overheadByDate([e], `${month}-01`, lastDay(month), closedWeekdays).total,
+    [month, closedWeekdays]
   );
 
-  const days = Number(lastDay(month).slice(-2));
+  const days = monthTotals.days || Number(lastDay(month).slice(-2));
 
   async function remove(e) {
     if (!window.confirm(`Delete ${e.name}?`)) return;
@@ -304,13 +311,14 @@ export default function OverheadsPage() {
               <strong>{formatMoney(monthTotals.total, currency)}</strong>
             </div>
             <div className="pos-stat">
-              <span>Per day</span>
+              <span>Per open day</span>
               <strong>{formatMoney(monthTotals.total / days, currency)}</strong>
             </div>
           </div>
           <p className="pos-meta">
             Your café needs about <strong>{formatMoney(monthTotals.total / days, currency)}</strong>{' '}
-            gross profit every day just to cover overheads, before salary.
+            gross profit each open day to cover overheads, before salary. Closed days (e.g. Monday)
+            are skipped.
           </p>
         </div>
         <div className="pos-card">

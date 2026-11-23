@@ -166,7 +166,7 @@ function ProductCard({ product, currency, onEdit }) {
     >
       <div className="pos-inv-card-media">
         {product.image_url ? (
-          <img src={product.image_url} alt="" loading="lazy" />
+          <img src={product.image_url} alt="" loading="eager" decoding="async" />
         ) : (
           <span className="pos-inv-card-placeholder" aria-hidden="true" />
         )}

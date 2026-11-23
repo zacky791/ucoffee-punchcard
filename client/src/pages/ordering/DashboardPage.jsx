@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../../api';
+import PeriodRangeNav, { PeriodCustomRange } from '../../components/PeriodRangeNav';
 import { formatMoney } from '../../context/CartContext';
 import {
   addDays,
@@ -8,6 +9,7 @@ import {
   businessDayRange,
   parseDateKey,
 } from '../../lib/performance';
+import { usePeriodRange } from '../../lib/periodRange';
 import { restockList } from '../../lib/restock';
 import { OrderDetailModal } from './OrdersPage';
 
@@ -301,30 +303,27 @@ export default function DashboardPage() {
   );
 }
 
-function FilterIcon() {
-  return (
-    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
-      <path
-        d="M4 6h16M7 12h10M10 18h4"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-}
-
 function SalesTrend({ today, currency, refreshKey = 0, onDayChange }) {
-  const [from, setFrom] = useState(addDays(today, -6));
-  const [to, setTo] = useState(today);
+  const period = usePeriodRange(today, { initialMode: 'week' });
+  const {
+    mode,
+    from,
+    to,
+    label,
+    canGoForward,
+    showCustom,
+    presets,
+    pickers,
+    shiftRange,
+    setFromDate,
+    setToDate,
+  } = period;
   const [buckets, setBuckets] = useState(null);
   const [error, setError] = useState('');
-  const [showRange, setShowRange] = useState(false);
   const scrollRef = useRef(null);
 
   const days = Math.round((parseDateKey(to) - parseDateKey(from)) / 86400000) + 1;
-  const byMonth = days > MAX_DAILY_BARS;
+  const byMonth = mode === 'month' || days > MAX_DAILY_BARS;
 
   useEffect(() => {
     if (from > to) return;
@@ -342,6 +341,10 @@ function SalesTrend({ today, currency, refreshKey = 0, onDayChange }) {
       alive = false;
     };
   }, [from, to, byMonth, refreshKey]);
+
+  useEffect(() => {
+    onDayChange?.(to);
+  }, [to, onDayChange]);
 
   const bars = useMemo(() => {
     const found = Object.fromEntries((buckets || []).map((b) => [b.key, b]));
@@ -378,36 +381,7 @@ function SalesTrend({ today, currency, refreshKey = 0, onDayChange }) {
   const ticks = [4, 3, 2, 1, 0].map((i) => (max * i) / 4);
   const total = bars.reduce((s, b) => s + b.total, 0);
   const labelEvery = Math.ceil(bars.length / 10);
-  const singleDay = from === to;
-  const activePreset = [7, 30, 90].find((n) => to === today && from === addDays(today, -(n - 1)));
   const activeBar = bars.find((b) => b.key === active);
-  const focusDay = singleDay ? from : to;
-  const canGoForward = focusDay < today;
-  const dayLabel = singleDay ? dayName(focusDay, today) : null;
-
-  function preset(n) {
-    setTo(today);
-    setFrom(addDays(today, -(n - 1)));
-    onDayChange?.(today);
-  }
-
-  function shiftDay(delta) {
-    const next = addDays(focusDay, delta);
-    if (next > today) return;
-    setFrom(next);
-    setTo(next);
-    onDayChange?.(next);
-  }
-
-  function setFromDate(value) {
-    setFrom(value);
-    if (value === to) onDayChange?.(value);
-  }
-
-  function setToDate(value) {
-    setTo(value);
-    if (value === from) onDayChange?.(value);
-  }
 
   return (
     <div className="pos-card" style={{ marginTop: '0.85rem' }}>
@@ -415,78 +389,27 @@ function SalesTrend({ today, currency, refreshKey = 0, onDayChange }) {
         <h2 className="pos-card-title" style={{ margin: 0 }}>
           Sales trend
         </h2>
-        <div className="pos-trend-total-wrap">
-          <button
-            type="button"
-            className={`pos-icon-btn ${showRange ? 'active' : ''}`}
-            aria-label="Filter date range"
-            aria-expanded={showRange}
-            onClick={() => setShowRange((v) => !v)}
-          >
-            <FilterIcon />
-          </button>
-          <strong className="pos-trend-total">
-            {formatMoney(total, currency)}
-            {dayLabel && <span> · {dayLabel}</span>}
-          </strong>
-        </div>
+        <strong className="pos-trend-total">
+          {formatMoney(total, currency)}
+          <span> · {label}</span>
+        </strong>
       </div>
-      <div className="pos-day-nav pos-trend-presets">
-        {[7, 30, 90].map((n) => (
-          <button
-            key={n}
-            type="button"
-            className={`pos-btn ${activePreset === n ? 'primary' : 'ghost'}`}
-            aria-pressed={activePreset === n}
-            onClick={() => preset(n)}
-          >
-            {n}d
-          </button>
-        ))}
-      </div>
-      <div className="pos-day-nav pos-trend-arrows">
-        <button
-          type="button"
-          className="pos-btn ghost"
-          aria-label="Previous day"
-          onClick={() => shiftDay(-1)}
-        >
-          ←
-        </button>
-        <button
-          type="button"
-          className="pos-btn ghost"
-          aria-label="Next day"
-          disabled={!canGoForward}
-          onClick={() => shiftDay(1)}
-        >
-          →
-        </button>
-      </div>
-      {showRange && (
-        <div className="pos-range">
-          <label className="pos-field">
-            <span className="pos-cart-label">From</span>
-            <input
-              type="date"
-              className="pos-input"
-              value={from}
-              max={to}
-              onChange={(e) => e.target.value && setFromDate(e.target.value)}
-            />
-          </label>
-          <label className="pos-field">
-            <span className="pos-cart-label">To</span>
-            <input
-              type="date"
-              className="pos-input"
-              value={to}
-              min={from}
-              max={today}
-              onChange={(e) => e.target.value && setToDate(e.target.value)}
-            />
-          </label>
-        </div>
+      <PeriodRangeNav
+        className="pos-trend-presets"
+        mode={mode}
+        presets={presets}
+        pickers={pickers}
+        shiftRange={shiftRange}
+        canGoForward={canGoForward}
+      />
+      {showCustom && (
+        <PeriodCustomRange
+          from={from}
+          to={to}
+          today={today}
+          setFromDate={setFromDate}
+          setToDate={setToDate}
+        />
       )}
       {error && <div className="pos-alert error">{error}</div>}
       {!buckets ? (
