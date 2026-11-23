@@ -5,6 +5,8 @@
 
 [build.environment]
   NODE_VERSION = "22"
+  # Same-origin /api → Netlify Functions (do not use the Render punch-only host)
+  VITE_API_URL = ""
   SUPABASE_URL = "https://vpqsmvxcssyqrfsfvcrt.supabase.co"
   SUPABASE_ANON_KEY = "sb_publishable_qwE681JAEkSjQQIAkhFnpA_leV6OQzE"
   VITE_SUPABASE_URL = "https://vpqsmvxcssyqrfsfvcrt.supabase.co"

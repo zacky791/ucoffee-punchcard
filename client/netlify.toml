@@ -4,7 +4,9 @@
 
 [build.environment]
   NODE_VERSION = "22"
-  VITE_API_URL = "https://ucoffee-clock-in-backend.onrender.com"
+  # Empty = same-origin /api → Netlify Functions (root netlify.toml).
+  # Do not point at the old Render punch-only service — it has no POS inventory routes.
+  VITE_API_URL = ""
   VITE_STAFF_PIN = "9897"
 
 [[redirects]]
