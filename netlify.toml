@@ -20,7 +20,8 @@
 
 [functions]
   node_bundler = "zisi"
-  included_files = ["server/src/**"]
+  # Serving sidecar (station / image_url / aliases) lives under server/data
+  included_files = ["server/src/**", "server/data/**"]
 
 # API must win over SPA fallback (! = force)
 [[redirects]]

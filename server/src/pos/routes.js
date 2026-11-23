@@ -5,17 +5,34 @@ const hardware = require('../integrations/hardware');
 
 const SERVING_FILE = path.join(__dirname, '../../data/inventory-serving.json');
 
+// Bundled into the Netlify Function (fs sidecar is missing or ephemeral there).
+let bundledServingMap = {};
+try {
+  bundledServingMap = require('../../data/inventory-serving.json');
+} catch {
+  bundledServingMap = {};
+}
+
 function readServingMap() {
   try {
-    return JSON.parse(fs.readFileSync(SERVING_FILE, 'utf8'));
+    const fromFs = JSON.parse(fs.readFileSync(SERVING_FILE, 'utf8'));
+    if (fromFs && typeof fromFs === 'object' && Object.keys(fromFs).length) {
+      return fromFs;
+    }
   } catch {
-    return {};
+    /* Netlify / read-only */
   }
+  return { ...bundledServingMap };
 }
 
 function writeServingMap(map) {
-  fs.mkdirSync(path.dirname(SERVING_FILE), { recursive: true });
-  fs.writeFileSync(SERVING_FILE, JSON.stringify(map, null, 2));
+  try {
+    fs.mkdirSync(path.dirname(SERVING_FILE), { recursive: true });
+    fs.writeFileSync(SERVING_FILE, JSON.stringify(map, null, 2));
+  } catch {
+    /* Netlify FS is ephemeral — in-memory merge still applies for this invocation */
+  }
+  bundledServingMap = { ...map };
 }
 
 function saveItemServing(id, body = {}) {
@@ -42,7 +59,7 @@ function saveItemServing(id, body = {}) {
       body.serving_note !== undefined
         ? String(body.serving_note || '').trim().slice(0, 80)
         : String(prev.serving_note || ''),
-    station: station === 'kitchen' ? 'kitchen' : 'barista',
+    station: station === 'kitchen' || station === 'bakery' ? station : 'barista',
     image_url:
       body.image_url !== undefined
         ? String(body.image_url || '').trim().slice(0, 500)
@@ -55,17 +72,29 @@ function saveItemServing(id, body = {}) {
   writeServingMap(map);
 }
 
+function normalizeStation(value) {
+  const station = String(value || 'barista').trim().toLowerCase();
+  return station === 'kitchen' || station === 'bakery' ? station : 'barista';
+}
+
 function withServing(item) {
   const s = readServingMap()[item.id] || {};
   const fromDbServing = item.use_per_serving != null ? Number(item.use_per_serving) : null;
   const fromDbNote = item.serving_note != null ? String(item.serving_note) : null;
+  const fromDbStation = item.station != null ? String(item.station) : null;
+  const fromDbImage = item.image_url != null ? String(item.image_url) : null;
+  const fromDbAliases = item.aliases != null ? String(item.aliases) : null;
   return {
     ...item,
-    use_per_serving: fromDbServing != null && !Number.isNaN(fromDbServing) ? fromDbServing : Number(s.use_per_serving || 0),
+    use_per_serving:
+      fromDbServing != null && !Number.isNaN(fromDbServing)
+        ? fromDbServing
+        : Number(s.use_per_serving || 0),
     serving_note: (fromDbNote && fromDbNote.trim()) || s.serving_note || null,
-    station: s.station === 'kitchen' ? 'kitchen' : 'barista',
-    image_url: s.image_url || item.image_url || null,
-    aliases: s.aliases || '',
+    // Prefer DB (works on Netlify); fall back to local sidecar JSON
+    station: normalizeStation(fromDbStation || s.station),
+    image_url: (fromDbImage && fromDbImage.trim()) || s.image_url || null,
+    aliases: (fromDbAliases && fromDbAliases.trim()) || s.aliases || '',
   };
 }
 
@@ -1233,6 +1262,8 @@ function createPosRouter(getSupabase) {
   });
 
   function inventoryFields(body) {
+    // Only columns that exist on pos_inventory_items today.
+    // Station / image / serving meta live in inventory-serving.json (bundled on Netlify).
     const out = {};
     if (body.name !== undefined) out.name = String(body.name).trim();
     if (body.unit !== undefined) out.unit = String(body.unit).trim() || 'pcs';
@@ -1243,7 +1274,6 @@ function createPosRouter(getSupabase) {
       if (size <= 0) throw Object.assign(new Error('Pack size must be more than 0'), { status: 400 });
       out.pack_size = size;
     }
-    // use_per_serving / serving_note stored via sidecar until DB migration is applied
     if (typeof body.active === 'boolean') out.active = body.active;
     return out;
   }
@@ -2444,7 +2474,11 @@ function createPosRouter(getSupabase) {
         if (prodErr) throw prodErr;
         for (const p of prods || []) {
           const kind = p.category?.kind;
-          const name = p.category?.name || '';
+          const name = String(p.category?.name || '');
+          if (/^bakery$/i.test(name.trim())) {
+            stationByProductId[p.id] = 'bakery';
+            continue;
+          }
           const isDrink =
             kind === 'drink' ||
             (!kind && /coffee|matcha|tea|drink|juice|smoothie|latte|beverage|soda/i.test(name));

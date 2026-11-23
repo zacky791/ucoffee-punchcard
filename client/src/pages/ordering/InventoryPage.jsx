@@ -1,12 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from '../../api';
 import Toast from '../../components/Toast';
+import { INV_STATIONS, normalizeStation, stationLabel } from '../../lib/stations';
 
 const UNITS = ['g', 'ml', 'pcs', 'kg', 'L', 'slice', 'pack'];
-const STATIONS = [
-  { id: 'barista', label: 'Barista' },
-  { id: 'kitchen', label: 'Kitchen' },
-];
+const STATIONS = INV_STATIONS;
 
 const emptyItem = {
   name: '',
@@ -46,7 +44,7 @@ function ItemModal({ item, onClose, onSaved }) {
               ? String(item.use_per_serving)
               : '',
           serving_note: item.serving_note || '',
-          station: item.station === 'kitchen' ? 'kitchen' : 'barista',
+          station: normalizeStation(item.station),
         }
   );
   const [busy, setBusy] = useState(false);
@@ -313,16 +311,15 @@ export default function InventoryPage() {
 
   const filtered = useMemo(() => {
     if (stationFilter === 'all') return items;
-    return items.filter((i) => (i.station || 'barista') === stationFilter);
+    return items.filter((i) => normalizeStation(i.station) === stationFilter);
   }, [items, stationFilter]);
 
   const grouped = useMemo(() => {
-    const barista = filtered.filter((i) => (i.station || 'barista') === 'barista');
-    const kitchen = filtered.filter((i) => i.station === 'kitchen');
-    return [
-      { id: 'barista', label: 'Barista', items: barista },
-      { id: 'kitchen', label: 'Kitchen', items: kitchen },
-    ].filter((g) => g.items.length > 0);
+    return STATIONS.map((s) => ({
+      id: s.id,
+      label: s.label,
+      items: filtered.filter((i) => normalizeStation(i.station) === s.id),
+    })).filter((g) => g.items.length > 0);
   }, [filtered]);
 
   return (
@@ -419,7 +416,7 @@ export default function InventoryPage() {
                       <strong>{i.name}</strong>
                     </td>
                     <td data-label="Station">
-                      {i.station === 'kitchen' ? 'Kitchen' : 'Barista'}
+                      {stationLabel(i.station)}
                     </td>
                     <td data-label="In stock">
                       {formatQty(i.quantity)} {i.unit}

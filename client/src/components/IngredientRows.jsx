@@ -1,4 +1,5 @@
 import { formatUnitCost } from '../pages/ordering/InventoryPage';
+import { INV_STATIONS, groupByStation as groupInventoryByStation } from '../lib/stations';
 
 export const emptyIngredient = () => ({ inventory_item_id: '', quantity_per_unit: '' });
 
@@ -28,11 +29,7 @@ export function ingredientCost(rows, byId) {
 }
 
 function groupByStation(inventory = []) {
-  const groups = { barista: [], kitchen: [] };
-  for (const i of inventory) {
-    const key = i.station === 'kitchen' ? 'kitchen' : 'barista';
-    groups[key].push(i);
-  }
+  const groups = groupInventoryByStation(inventory);
   for (const key of Object.keys(groups)) {
     groups[key].sort((a, b) => a.name.localeCompare(b.name));
   }
@@ -69,10 +66,7 @@ export default function IngredientRows({ rows, onChange, inventory, byId, curren
                 }}
               >
                 <option value="">Select ingredient</option>
-                {[
-                  ['barista', 'Barista'],
-                  ['kitchen', 'Kitchen'],
-                ].map(([key, label]) =>
+                {INV_STATIONS.map(({ id: key, label }) =>
                   groups[key].length ? (
                     <optgroup key={key} label={label}>
                       {groups[key].map((i) => (

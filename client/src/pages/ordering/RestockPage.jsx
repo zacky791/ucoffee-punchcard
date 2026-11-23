@@ -4,6 +4,7 @@ import { api } from '../../api';
 import { formatMoney } from '../../context/CartContext';
 import Toast from '../../components/Toast';
 import { businessDateKey } from '../../lib/performance';
+import { INV_STATIONS, groupByStation, stationLabel } from '../../lib/stations';
 
 function fmtQty(n) {
   return Number(n || 0).toLocaleString('en-MY', { maximumFractionDigits: 3 });
@@ -26,13 +27,7 @@ function groupStockOptions(stockList, suggestions = []) {
         ...stockList.filter((i) => !suggestions.some((s) => s.id === i.id)),
       ]
     : stockList;
-  const groups = { barista: [], kitchen: [] };
-  for (const i of ordered) {
-    const full = stockList.find((s) => s.id === i.id) || i;
-    const key = full.station === 'kitchen' ? 'kitchen' : 'barista';
-    groups[key].push({ ...full, ...i });
-  }
-  return groups;
+  return groupByStation(ordered, (i) => stockList.find((s) => s.id === i.id) || i);
 }
 
 function compressReceipt(file) {
@@ -527,8 +522,7 @@ export default function RestockPage() {
                             >
                               <option value="">Choose registered stock…</option>
                               {[
-                                ['barista', 'Barista'],
-                                ['kitchen', 'Kitchen'],
+                                ...INV_STATIONS.map((s) => [s.id, s.label]),
                               ].map(([key, label]) => {
                                 const items = groupStockOptions(
                                   stockList,
@@ -572,7 +566,7 @@ export default function RestockPage() {
                                     <strong>{selected.name}</strong>
                                     <span className="pos-meta">
                                       {selected.unit || '—'}
-                                      {selected.station === 'kitchen' ? ' · Kitchen' : ' · Barista'}
+                                      {` · ${stationLabel(selected.station)}`}
                                     </span>
                                   </div>
                                 </div>

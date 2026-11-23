@@ -448,6 +448,7 @@ export default function ProfitPage() {
                 <>
                   {[
                     ['kitchen', 'Kitchen'],
+                    ['bakery', 'Bakery'],
                     ['barista', 'Barista'],
                   ].map(([station, title]) => {
                     const rows = report.products.filter(

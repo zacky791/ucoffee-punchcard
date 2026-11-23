@@ -150,5 +150,40 @@
     "station": "barista",
     "image_url": "/inventory/cups.jpg",
     "aliases": "cup, cups, ice, ais, cup ice, packaging"
+  },
+  "c6764d87-7ce1-4ca3-9dd1-0128353d9f7e": {
+    "use_per_serving": 1,
+    "serving_note": "1 pcs",
+    "station": "bakery",
+    "image_url": "/inventory/croissant.jpg",
+    "aliases": "croissant, croisant, butter croissant"
+  },
+  "a6723bef-9ac4-49b5-ac44-c1f7cb3154f7": {
+    "use_per_serving": 30,
+    "serving_note": "30 g",
+    "station": "bakery",
+    "image_url": "/inventory/pistachio-sauce.jpg",
+    "aliases": "pistachio, pistachio sauce, pistacio"
+  },
+  "581c656f-f81c-4add-939b-64706d63d8a1": {
+    "use_per_serving": 30,
+    "serving_note": "30 g",
+    "station": "bakery",
+    "image_url": "/inventory/cream-cheese.jpg",
+    "aliases": "cream cheese, cheese cream"
+  },
+  "311060b8-4f7f-493a-933b-6e6260d30634": {
+    "use_per_serving": 30,
+    "serving_note": "30 g",
+    "station": "bakery",
+    "image_url": "/inventory/chocolate.jpg",
+    "aliases": "chocolate sauce, bakery chocolate, choc sauce"
+  },
+  "1c6c7621-4d02-4132-815c-6a70c08a8920": {
+    "use_per_serving": 30,
+    "serving_note": "30 g",
+    "station": "bakery",
+    "image_url": "/inventory/black-pink-sauce.jpg",
+    "aliases": "black pink, blackpink sauce, sauce black pink"
   }
 }

@@ -12,6 +12,8 @@ import { kindOf } from '../../lib/menuKind';
 import { formatUnitCost } from './InventoryPage';
 
 function stationOf(product) {
+  const catName = String(product?.category?.name || '').trim().toLowerCase();
+  if (catName === 'bakery') return 'bakery';
   return kindOf(product) === 'food' ? 'kitchen' : 'barista';
 }
 
@@ -257,8 +259,8 @@ export default function MarginProductPage() {
   }, [loadCosting]);
 
   const counts = useMemo(() => {
-    const c = { barista: 0, kitchen: 0 };
-    for (const p of products) c[stationOf(p)] += 1;
+    const c = { barista: 0, kitchen: 0, bakery: 0 };
+    for (const p of products) c[stationOf(p)] = (c[stationOf(p)] || 0) + 1;
     return c;
   }, [products]);
 
@@ -268,6 +270,12 @@ export default function MarginProductPage() {
   );
 
   const unset = filtered.filter((p) => !Number(p.total_cost)).length;
+  const stationTabs = [
+    ['barista', 'Barista'],
+    ['kitchen', 'Kitchen'],
+    ['bakery', 'Bakery'],
+  ];
+  const stationTitle = stationTabs.find(([id]) => id === station)?.[1] || 'Barista';
 
   return (
     <div>
@@ -281,10 +289,7 @@ export default function MarginProductPage() {
 
       <div className="pos-inv-toolbar">
         <div className="pos-segment" role="tablist" aria-label="Station">
-          {[
-            ['barista', 'Barista'],
-            ['kitchen', 'Kitchen'],
-          ].map(([value, label]) => (
+          {stationTabs.map(([value, label]) => (
             <button
               key={value}
               type="button"
@@ -293,7 +298,7 @@ export default function MarginProductPage() {
               aria-selected={station === value}
               onClick={() => setStation(value)}
             >
-              {label} <span>{counts[value]}</span>
+              {label} <span>{counts[value] || 0}</span>
             </button>
           ))}
         </div>
@@ -301,7 +306,7 @@ export default function MarginProductPage() {
 
       <div className="pos-card" style={{ overflowX: 'auto', marginBottom: '0.85rem' }}>
         <h2 style={{ marginTop: 0, fontSize: '1.05rem' }}>
-          {station === 'barista' ? 'Barista' : 'Kitchen'} costing
+          {stationTitle} costing
         </h2>
         {unset > 0 && (
           <p className="pos-meta" style={{ marginBottom: '0.6rem' }}>
