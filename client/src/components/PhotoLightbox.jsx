@@ -1,4 +1,15 @@
+import { useEffect } from 'react';
+
 export default function PhotoLightbox({ src, name, onClose }) {
+  useEffect(() => {
+    if (!src) return undefined;
+    function onKey(e) {
+      if (e.key === 'Escape') onClose();
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [src, onClose]);
+
   if (!src) return null;
 
   return (
@@ -6,7 +17,7 @@ export default function PhotoLightbox({ src, name, onClose }) {
       className="photo-lightbox"
       role="dialog"
       aria-modal="true"
-      aria-label={`${name || 'Staff'} photo`}
+      aria-label={name ? `${name} preview` : 'Photo preview'}
       onClick={onClose}
     >
       <button type="button" className="photo-lightbox-close" onClick={onClose}>
@@ -14,7 +25,7 @@ export default function PhotoLightbox({ src, name, onClose }) {
       </button>
       <img
         src={src}
-        alt={name || 'Staff photo'}
+        alt={name || 'Photo preview'}
         className="photo-lightbox-img"
         onClick={(e) => e.stopPropagation()}
       />

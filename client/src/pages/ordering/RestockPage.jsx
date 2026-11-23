@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../../api';
 import { formatMoney } from '../../context/CartContext';
 import Toast from '../../components/Toast';
+import PhotoLightbox from '../../components/PhotoLightbox';
 import { businessDateKey } from '../../lib/performance';
 import { INV_STATIONS, groupByStation, stationLabel } from '../../lib/stations';
 
@@ -97,6 +98,7 @@ export default function RestockPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [toast, setToast] = useState(null);
+  const [lightbox, setLightbox] = useState(null);
   const fileRef = useRef(null);
 
   useEffect(() => {
@@ -397,7 +399,6 @@ export default function RestockPage() {
                 type="file"
                 accept="image/*"
                 multiple
-                capture="environment"
                 hidden
                 onChange={onPickReceipts}
               />
@@ -408,7 +409,9 @@ export default function RestockPage() {
                 disabled={busy || receipts.length >= MAX_RECEIPTS}
                 onClick={() => fileRef.current?.click()}
               >
-                {receipts.length ? 'Add more photos' : 'Upload receipt(s)'}
+                {receipts.length
+                  ? `Add more from gallery (${receipts.length}/${MAX_RECEIPTS})`
+                  : 'Choose from gallery'}
               </button>
             </div>
 
@@ -417,7 +420,14 @@ export default function RestockPage() {
                 <div className="pos-restock-receipt-grid">
                   {receipts.map((r) => (
                     <div key={r.id} className="pos-restock-receipt-thumb">
-                      <img src={r.url} alt={r.name} />
+                      <button
+                        type="button"
+                        className="pos-restock-receipt-open"
+                        aria-label={`Preview ${r.name}`}
+                        onClick={() => setLightbox({ src: r.url, name: r.name })}
+                      >
+                        <img src={r.url} alt={r.name} />
+                      </button>
                       <button
                         type="button"
                         className="pos-chat-attach-remove"
@@ -551,17 +561,29 @@ export default function RestockPage() {
                               if (!selected) return null;
                               return (
                                 <div className="pos-restock-stock-preview">
-                                  <span className="pos-restock-stock-thumb">
-                                    {selected.image_url ? (
+                                  {selected.image_url ? (
+                                    <button
+                                      type="button"
+                                      className="pos-restock-stock-thumb"
+                                      aria-label={`Preview ${selected.name}`}
+                                      onClick={() =>
+                                        setLightbox({
+                                          src: selected.image_url,
+                                          name: selected.name,
+                                        })
+                                      }
+                                    >
                                       <img
                                         src={selected.image_url}
                                         alt={selected.name}
                                         loading="lazy"
                                       />
-                                    ) : (
-                                      <span aria-hidden="true" />
-                                    )}
-                                  </span>
+                                    </button>
+                                  ) : (
+                                    <span className="pos-restock-stock-thumb" aria-hidden="true">
+                                      <span />
+                                    </span>
+                                  )}
                                   <div>
                                     <strong>{selected.name}</strong>
                                     <span className="pos-meta">
@@ -812,6 +834,11 @@ export default function RestockPage() {
       </form>
 
       <Toast toast={toast} onDone={() => setToast(null)} />
+      <PhotoLightbox
+        src={lightbox?.src}
+        name={lightbox?.name}
+        onClose={() => setLightbox(null)}
+      />
     </div>
   );
 }

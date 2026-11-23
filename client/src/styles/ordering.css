@@ -2388,6 +2388,16 @@ html:has(.pos-modal-backdrop) body {
   overflow: hidden;
 }
 
+.pos-restock-receipt-open {
+  display: block;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: zoom-in;
+}
+
 .pos-restock-receipt-thumb img {
   width: 100%;
   height: 100%;
@@ -2481,20 +2491,27 @@ html:has(.pos-modal-backdrop) body {
 .pos-restock-stock-thumb {
   width: 56px;
   height: 56px;
+  padding: 0;
+  border: 0;
   border-radius: 8px;
   overflow: hidden;
   background: #f3f1ee;
+  flex-shrink: 0;
+}
+
+button.pos-restock-stock-thumb {
+  cursor: zoom-in;
 }
 
 .pos-restock-stock-thumb img,
-.pos-restock-stock-thumb span {
+.pos-restock-stock-thumb > span {
   width: 100%;
   height: 100%;
   object-fit: cover;
   display: block;
 }
 
-.pos-restock-stock-thumb span {
+.pos-restock-stock-thumb > span {
   background: linear-gradient(145deg, #efeae3, #e2d8cc);
 }
 
