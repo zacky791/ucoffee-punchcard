@@ -99,6 +99,87 @@ export function ProfitChart({ data }) {
   );
 }
 
+const PIE_COLORS = ['#4e79a7', '#f28e2b', '#e15759', '#76b7b2', '#59a14f', '#edc948', '#b07aa1', '#ff9da7'];
+
+/** Simple SVG pie: slices [{ label, value }] */
+export function PieChart({ title, unit = 'MYR', slices = [] }) {
+  const rows = (slices || [])
+    .map((s) => ({ label: String(s.label || ''), value: Math.max(0, Number(s.value) || 0) }))
+    .filter((s) => s.value > 0);
+  const total = rows.reduce((s, r) => s + r.value, 0);
+  const size = 220;
+  const cx = size / 2;
+  const cy = size / 2;
+  const r = 84;
+
+  function arc(start, end) {
+    const a0 = (start / total) * Math.PI * 2 - Math.PI / 2;
+    const a1 = (end / total) * Math.PI * 2 - Math.PI / 2;
+    const x0 = cx + r * Math.cos(a0);
+    const y0 = cy + r * Math.sin(a0);
+    const x1 = cx + r * Math.cos(a1);
+    const y1 = cy + r * Math.sin(a1);
+    const large = end - start > total / 2 ? 1 : 0;
+    return `M ${cx} ${cy} L ${x0} ${y0} A ${r} ${r} 0 ${large} 1 ${x1} ${y1} Z`;
+  }
+
+  let cursor = 0;
+  const paths = rows.map((row, i) => {
+    const start = cursor;
+    const end = cursor + row.value;
+    cursor = end;
+    if (rows.length === 1) {
+      return (
+        <circle key={row.label + i} cx={cx} cy={cy} r={r} fill={PIE_COLORS[i % PIE_COLORS.length]} />
+      );
+    }
+    return (
+      <path
+        key={row.label + i}
+        d={arc(start, end)}
+        fill={PIE_COLORS[i % PIE_COLORS.length]}
+      >
+        <title>{`${row.label}: ${unit} ${row.value.toFixed(2)}`}</title>
+      </path>
+    );
+  });
+
+  return (
+    <div className="pos-pie">
+      {title ? <div className="pos-pie-title">{title}</div> : null}
+      {total <= 0 ? (
+        <div className="pos-meta">No values to chart</div>
+      ) : (
+        <div className="pos-pie-body">
+          <svg viewBox={`0 0 ${size} ${size}`} role="img" aria-label={title || 'Pie chart'}>
+            {paths}
+            <circle cx={cx} cy={cy} r={42} fill="var(--pos-card, #fff)" />
+            <text x={cx} y={cy - 4} textAnchor="middle" className="pos-pie-total">
+              {unit}
+            </text>
+            <text x={cx} y={cy + 14} textAnchor="middle" className="pos-pie-total-val">
+              {total.toFixed(total >= 100 ? 0 : 2)}
+            </text>
+          </svg>
+          <ul className="pos-pie-legend">
+            {rows.map((row, i) => (
+              <li key={row.label + i}>
+                <i style={{ background: PIE_COLORS[i % PIE_COLORS.length] }} />
+                <span>
+                  {row.label}
+                  <small>
+                    {unit} {row.value.toFixed(2)} · {((row.value / total) * 100).toFixed(1)}%
+                  </small>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /** Horizontal bars: rows [{ key, label, value, display, tone }] */
 export function BarList({ rows }) {
   const max = Math.max(1, ...rows.map((r) => Math.abs(r.value)));

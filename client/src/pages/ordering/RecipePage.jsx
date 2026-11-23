@@ -3,9 +3,11 @@ import { Link } from 'react-router-dom';
 import { api } from '../../api';
 import Toast from '../../components/Toast';
 import IngredientRows, {
+  ingredientCost,
   toIngredientPayload,
   toIngredientRows,
 } from '../../components/IngredientRows';
+import { formatUnitCost } from './InventoryPage';
 import { kindOf } from '../../lib/menuKind';
 
 function formatQty(n) {
@@ -25,6 +27,7 @@ function RecipeModal({ product, inventory, currency, onClose, onSaved }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const byId = useMemo(() => Object.fromEntries(inventory.map((i) => [i.id, i])), [inventory]);
+  const totalCost = useMemo(() => ingredientCost(rows, byId), [rows, byId]);
 
   async function save(e) {
     e.preventDefault();
@@ -65,6 +68,12 @@ function RecipeModal({ product, inventory, currency, onClose, onSaved }) {
           byId={byId}
           currency={currency}
         />
+        <div className="pos-totals" style={{ marginTop: '0.75rem' }}>
+          <div className="grand">
+            <span>Total cost</span>
+            <span>{formatUnitCost(totalCost, currency)}</span>
+          </div>
+        </div>
 
         <label className="pos-field" style={{ marginTop: '0.9rem' }}>
           <span>How to make (one step per line)</span>
@@ -147,7 +156,6 @@ export default function RecipePage() {
       <div className="pos-page-head">
         <div>
           <h1>Recipe</h1>
-          <p>How to make each item. Ingredients are deducted from inventory on every sale.</p>
         </div>
       </div>
 
@@ -191,8 +199,21 @@ export default function RecipePage() {
             <div className="pos-recipe-grid">
               {items.map((p) => {
                 const list = steps(p.recipe_notes);
+                const makeCost = Number(p.ingredient_cost) || 0;
                 return (
-                  <article key={p.id} className="pos-card pos-recipe-card">
+                  <article
+                    key={p.id}
+                    className="pos-card pos-recipe-card pos-recipe-card-clickable"
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => setEditing(p)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        setEditing(p);
+                      }
+                    }}
+                  >
                     <header>
                       {p.image_url ? (
                         <img src={p.image_url} alt="" loading="lazy" />
@@ -203,15 +224,11 @@ export default function RecipePage() {
                         <strong>{p.name}</strong>
                         <span className="pos-product-meta">
                           {p.ingredients.length} ingredient(s)
+                          {makeCost > 0
+                            ? ` · Cost to make ${formatUnitCost(makeCost, currency)}`
+                            : ''}
                         </span>
                       </div>
-                      <button
-                        type="button"
-                        className="pos-btn ghost"
-                        onClick={() => setEditing(p)}
-                      >
-                        Edit
-                      </button>
                     </header>
 
                     {p.ingredients.length ? (

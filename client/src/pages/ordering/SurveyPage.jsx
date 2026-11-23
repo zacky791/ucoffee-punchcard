@@ -93,7 +93,6 @@ export default function SurveyPage() {
       <div className="pos-page-head">
         <div>
           <h1>Survey</h1>
-          <p>How customers heard about the shop, asked after each payment.</p>
         </div>
       </div>
 

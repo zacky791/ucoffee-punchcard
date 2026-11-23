@@ -478,6 +478,10 @@ alter table pos_inventory_items
   add column if not exists pack_price numeric(12,2) not null default 0 check (pack_price >= 0);
 alter table pos_inventory_items
   add column if not exists pack_size numeric(14,3) not null default 1 check (pack_size > 0);
+alter table pos_inventory_items
+  add column if not exists use_per_serving numeric(14,3) not null default 0;
+alter table pos_inventory_items
+  add column if not exists serving_note text;
 
 -- Per-product cost not tracked as stock (cup, lid, straw, packaging, gas...).
 alter table pos_products

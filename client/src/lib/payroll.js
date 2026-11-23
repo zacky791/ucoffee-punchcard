@@ -1,6 +1,6 @@
 import { api } from '../api';
 import { addDays, businessDayRange, pairShifts } from './performance';
-import { hourlyRateRm } from './salary';
+import { hourlyRateRm, isKitchenRole } from './salary';
 
 const CHUNK_DAYS = 28;
 
@@ -22,16 +22,22 @@ export async function loadPunches(fromKey, toKey) {
  * hours so far; missed clock-outs are unpaid and reported.
  */
 export function salaryByDate({ punches, staff }, fromKey, toKey, now = Date.now()) {
-  const names = new Map((staff || []).map((s) => [s.id, s.name]));
+  const byId = new Map((staff || []).map((s) => [s.id, s]));
   const byDate = {};
   const missed = new Set();
   const noRate = new Set();
   let total = 0;
   let hours = 0;
+  let barista = 0;
+  let kitchen = 0;
+  let baristaHours = 0;
+  let kitchenHours = 0;
 
   for (const shift of pairShifts(punches)) {
     if (!shift.in || shift.business_date < fromKey || shift.business_date > toKey) continue;
-    const name = names.get(shift.staff_id) || shift.staff?.name || 'Unknown';
+    const person = byId.get(shift.staff_id);
+    const name = person?.name || shift.staff?.name || 'Unknown';
+    const role = person?.role || shift.staff?.role || '';
     if (shift.status === 'missed_out') {
       missed.add(name);
       continue;
@@ -52,6 +58,13 @@ export function salaryByDate({ punches, staff }, fromKey, toKey, now = Date.now(
     byDate[shift.business_date] = (byDate[shift.business_date] || 0) + pay;
     total += pay;
     hours += h;
+    if (isKitchenRole(role)) {
+      kitchen += pay;
+      kitchenHours += h;
+    } else {
+      barista += pay;
+      baristaHours += h;
+    }
   }
 
   const round = (n) => Math.round(n * 100) / 100;
@@ -59,6 +72,10 @@ export function salaryByDate({ punches, staff }, fromKey, toKey, now = Date.now(
     byDate: Object.fromEntries(Object.entries(byDate).map(([k, v]) => [k, round(v)])),
     total: round(total),
     hours: Math.round(hours * 10) / 10,
+    barista: round(barista),
+    kitchen: round(kitchen),
+    baristaHours: Math.round(baristaHours * 10) / 10,
+    kitchenHours: Math.round(kitchenHours * 10) / 10,
     missed: [...missed],
     noRate: [...noRate],
   };

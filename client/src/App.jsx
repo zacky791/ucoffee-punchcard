@@ -14,11 +14,14 @@ import CategoriesPage from './pages/ordering/CategoriesPage';
 import InventoryPage from './pages/ordering/InventoryPage';
 import ReportsPage from './pages/ordering/ReportsPage';
 import ProfitPage from './pages/ordering/ProfitPage';
+import MarginProductPage from './pages/ordering/MarginProductPage';
 import RecipePage from './pages/ordering/RecipePage';
 import OverheadsPage from './pages/ordering/OverheadsPage';
 import ExpensesPage from './pages/ordering/ExpensesPage';
+import RestockPage from './pages/ordering/RestockPage';
 import SettingsPage from './pages/ordering/SettingsPage';
 import SurveyPage from './pages/ordering/SurveyPage';
+import ChatGptPage from './pages/ordering/ChatGptPage';
 import './App.css';
 
 export default function App() {
@@ -62,10 +65,14 @@ export default function App() {
             <Route path="products" element={<ProductsPage />} />
             <Route path="categories" element={<CategoriesPage />} />
             <Route path="inventory" element={<InventoryPage />} />
-            <Route path="expenses" element={<ExpensesPage />} />
+            <Route path="restock-overview" element={<ExpensesPage />} />
+            <Route path="restock" element={<RestockPage />} />
+            <Route path="expenses" element={<Navigate to="/ordering/restock-overview" replace />} />
             <Route path="survey" element={<SurveyPage />} />
+            <Route path="chatgpt" element={<ChatGptPage />} />
             <Route path="recipe" element={<RecipePage />} />
             <Route path="profit" element={<ProfitPage />} />
+            <Route path="margin-product" element={<MarginProductPage />} />
             <Route path="overheads" element={<OverheadsPage />} />
             <Route path="reports" element={<ReportsPage />} />
             <Route path="settings" element={<SettingsPage />} />

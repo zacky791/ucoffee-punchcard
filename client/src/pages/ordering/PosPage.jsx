@@ -3,7 +3,7 @@ import { api } from '../../api';
 import { formatMoney, itemsForCheckout, useCart } from '../../context/CartContext';
 import PrinterConnectButton from '../../components/PrinterConnectButton';
 import { printFromResult } from '../../lib/receiptPrinter';
-import { kindOf } from '../../lib/menuKind';
+import { isHourlyProduct, kindOf } from '../../lib/menuKind';
 import { SURVEY_SOURCES, surveyErrorMessage } from '../../lib/survey';
 
 function defaultTemp(product) {
@@ -33,6 +33,7 @@ export default function PosPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [modifierProduct, setModifierProduct] = useState(null);
+  const [hoursProduct, setHoursProduct] = useState(null);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [success, setSuccess] = useState(null);
   const [surveyOrder, setSurveyOrder] = useState(null);
@@ -108,6 +109,10 @@ export default function PosPage() {
 
   function onProductClick(product) {
     if (!product.active) return;
+    if (isHourlyProduct(product)) {
+      setHoursProduct(product);
+      return;
+    }
     const groups = product.modifier_groups || [];
     if (groups.length) {
       setModifierProduct(product);
@@ -296,11 +301,22 @@ export default function PosPage() {
                   <div className="pos-qty">
                     <button
                       type="button"
-                      onClick={() => cart.setQty(item.key, item.quantity - 1)}
+                      disabled={item.unit === 'hour' && item.quantity <= 1}
+                      onClick={() =>
+                        cart.setQty(
+                          item.key,
+                          item.unit === 'hour'
+                            ? Math.max(1, item.quantity - 1)
+                            : item.quantity - 1
+                        )
+                      }
                     >
                       −
                     </button>
-                    <span>{item.quantity}</span>
+                    <span>
+                      {item.quantity}
+                      {item.unit === 'hour' ? (item.quantity === 1 ? ' hr' : ' hrs') : ''}
+                    </span>
                     <button
                       type="button"
                       onClick={() => cart.setQty(item.key, item.quantity + 1)}
@@ -472,6 +488,18 @@ export default function PosPage() {
         />
       )}
 
+      {hoursProduct && (
+        <HoursModal
+          product={hoursProduct}
+          currency={currency}
+          onClose={() => setHoursProduct(null)}
+          onAdd={(payload) => {
+            cart.addItem(payload);
+            setHoursProduct(null);
+          }}
+        />
+      )}
+
       {checkoutOpen && (
         <CheckoutModal
           currency={currency}
@@ -600,6 +628,57 @@ function SurveyModal({ order, onDone }) {
               {busy ? 'Saving…' : 'Save'}
             </button>
           )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function HoursModal({ product, currency, onClose, onAdd }) {
+  const [hours, setHours] = useState(1);
+
+  function submit() {
+    const qty = Math.max(1, Number(hours) || 1);
+    onAdd({
+      product_id: product.id,
+      product_name: product.name,
+      sku: product.sku,
+      base_price: product.base_price,
+      modifiers: [],
+      quantity: qty,
+      unit: 'hour',
+      temp: null,
+    });
+  }
+
+  return (
+    <div className="pos-modal-backdrop" onClick={onClose}>
+      <div className="pos-modal" onClick={(e) => e.stopPropagation()}>
+        <h2>{product.name}</h2>
+        <p className="hint">Choose play time · {formatMoney(product.base_price, currency)}/hr</p>
+        <div className="pos-hours-picker" role="group" aria-label="Hours">
+          <button
+            type="button"
+            className="pos-btn ghost"
+            disabled={hours <= 1}
+            onClick={() => setHours((h) => Math.max(1, h - 1))}
+          >
+            −
+          </button>
+          <strong>
+            {hours} hour{hours === 1 ? '' : 's'}
+          </strong>
+          <button type="button" className="pos-btn ghost" onClick={() => setHours((h) => h + 1)}>
+            +
+          </button>
+        </div>
+        <div className="pos-modal-actions">
+          <button type="button" className="pos-btn ghost" onClick={onClose}>
+            Cancel
+          </button>
+          <button type="button" className="pos-btn primary" onClick={submit}>
+            Add · {hours} hr
+          </button>
         </div>
       </div>
     </div>

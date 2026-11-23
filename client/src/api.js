@@ -652,6 +652,11 @@ export const api = {
     const qs = new URLSearchParams(params).toString();
     return request(`/api/pos/purchases${qs ? `?${qs}` : ''}`);
   },
+  posParseReceipt: (body) =>
+    request('/api/pos/purchases/parse-receipt', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
   posCreatePurchase: (body) =>
     request('/api/pos/purchases', { method: 'POST', body: JSON.stringify(body) }),
   posUpdatePurchase: (id, body) =>
@@ -677,4 +682,9 @@ export const api = {
     request('/api/pos/hardware/test-print', { method: 'POST', body: '{}' }),
   posOpenDrawer: () =>
     request('/api/pos/hardware/open-drawer', { method: 'POST', body: '{}' }),
+  posChat: (messages) =>
+    request('/api/pos/chat', {
+      method: 'POST',
+      body: JSON.stringify({ messages }),
+    }),
 };

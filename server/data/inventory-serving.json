@@ -1,0 +1,154 @@
+{
+  "6c27d7d0-8cea-4cd0-8afe-9021bcf67dff": {
+    "use_per_serving": 10,
+    "serving_note": "2 pumps ≈ 10 ml",
+    "station": "barista",
+    "image_url": "/inventory/blue-syrup.jpg"
+  },
+  "a1181119-7550-4e28-a295-77ae48383bf7": {
+    "use_per_serving": 10,
+    "serving_note": "2 pumps ≈ 10 ml",
+    "station": "barista",
+    "image_url": "/inventory/caramel-syrup.jpg"
+  },
+  "af1143e6-9e60-4814-b67b-8a3c67c1eff8": {
+    "use_per_serving": 10,
+    "serving_note": "2 pumps ≈ 10 ml",
+    "station": "barista",
+    "image_url": "/inventory/vanilla-syrup.jpg"
+  },
+  "27c1dbb9-f3cd-4140-8231-32e2afbee9fb": {
+    "use_per_serving": 10,
+    "serving_note": "2 pumps ≈ 10 ml",
+    "station": "barista",
+    "image_url": "/inventory/hazelnut-syrup.jpg"
+  },
+  "f890fa97-0864-42d3-acb3-e643b1a15aed": {
+    "use_per_serving": 10,
+    "serving_note": "2 pumps ≈ 10 ml",
+    "station": "barista",
+    "image_url": "/inventory/salted-caramel-syrup.jpg"
+  },
+  "7943e9ee-734f-43a2-a548-d825d1c42021": {
+    "use_per_serving": 30,
+    "serving_note": "30 g",
+    "station": "barista",
+    "image_url": "/inventory/chocolate.jpg"
+  },
+  "382bffab-5cbc-418a-a063-16c5a7f1214d": {
+    "use_per_serving": 250,
+    "serving_note": "250 ml",
+    "station": "barista",
+    "image_url": "/inventory/milk.jpg"
+  },
+  "830f8622-49e8-4b62-bc95-f04da63beeea": {
+    "use_per_serving": 18,
+    "serving_note": "18 g",
+    "station": "barista",
+    "image_url": "/inventory/coffee-beans.jpg"
+  },
+  "9dffbff0-0a26-40d0-9e42-6f6ee359c3fa": {
+    "use_per_serving": 5,
+    "serving_note": "5 g",
+    "station": "barista",
+    "image_url": "/inventory/matcha.jpg"
+  },
+  "b951f889-fbe4-458a-808d-2eaf7d4d5aa0": {
+    "use_per_serving": 80,
+    "serving_note": "80 g",
+    "station": "kitchen",
+    "image_url": "/inventory/broccoli.jpg",
+    "aliases": "brokoli, brocolli, broccolli"
+  },
+  "239dcf9b-faa7-4df1-a7f9-e2e4ba058a52": {
+    "use_per_serving": 1,
+    "serving_note": "1 pcs",
+    "station": "kitchen",
+    "image_url": "/inventory/lemon.jpg",
+    "aliases": "limau, limau nipis, limau kasturi, lemon nipis"
+  },
+  "0d40ecea-6a4b-4c76-931a-c721afbb21dd": {
+    "use_per_serving": 0.2,
+    "serving_note": "200 g",
+    "station": "kitchen",
+    "image_url": "/inventory/potato.jpg",
+    "aliases": "ubi kentang, kentang, ubi"
+  },
+  "cc129362-e057-4200-80a4-2a41180817a2": {
+    "use_per_serving": 5,
+    "serving_note": "5 pcs (pack of 20)",
+    "station": "kitchen",
+    "image_url": "/inventory/chicken-nugget.jpg",
+    "aliases": "nugget, chicken nugget, nugget ayam, axion, axion dw chicken nugget"
+  },
+  "2f4a69b0-d66c-4974-a122-0114398f790d": {
+    "use_per_serving": 1,
+    "serving_note": "1 btl",
+    "station": "kitchen",
+    "image_url": "/inventory/mineral-water.jpg",
+    "aliases": "mineral water, air mineral, mineral, air, 9.5l"
+  },
+  "f3d1144d-80a6-4aed-9501-38034d0bfb66": {
+    "use_per_serving": 1,
+    "serving_note": "1 pack",
+    "station": "kitchen",
+    "image_url": "/inventory/plastic-bag.jpg",
+    "aliases": "plastic bag, plastik sampah, plastik, eco king plastik, garbage bag"
+  },
+  "4a94f96f-6861-448b-8c0a-beb2b46fcc4b": {
+    "use_per_serving": 0.1,
+    "serving_note": "100 g",
+    "station": "kitchen",
+    "image_url": "/inventory/shrimp.jpg",
+    "aliases": "shrimp, prawn, udang, isi udang, frz isi udang"
+  },
+  "af789333-0762-4398-a1a0-10bf94b29ebe": {
+    "use_per_serving": 100,
+    "serving_note": "1 pack",
+    "station": "kitchen",
+    "image_url": "/inventory/shabu-shabu.jpg",
+    "aliases": "shabu shabu, shabu, buffalo, frz buffalo, buffalo fq, ind frz buffalo"
+  },
+  "2dd56285-51bf-4de6-8730-2530c87e2dd4": {
+    "use_per_serving": 15,
+    "serving_note": "15 g",
+    "station": "kitchen",
+    "image_url": "/inventory/chili-sauce.jpg",
+    "aliases": "chili sauce, chilli sauce, sos cili, cili, kimball chilli, kimball chili"
+  },
+  "b79932a5-4099-4d0d-aeed-290f8264d3c2": {
+    "use_per_serving": 0.05,
+    "serving_note": "50 g",
+    "station": "kitchen",
+    "image_url": "/inventory/salad.jpg",
+    "aliases": "salad, salad bulat, my s salad, mys salad"
+  },
+  "6956c81a-9838-428f-874c-081deaa2ccff": {
+    "use_per_serving": 0.02,
+    "serving_note": "20 g",
+    "station": "kitchen",
+    "image_url": "/inventory/cooking-oil.jpg",
+    "aliases": "cooking oil, minyak masak, minyak, sai minyak"
+  },
+  "9dccb4cd-ad3d-4a93-874a-7278e80dce48": {
+    "use_per_serving": 3,
+    "serving_note": "1 pcs",
+    "station": "kitchen",
+    "image_url": "/inventory/orange.jpg",
+    "aliases": "orange, oren, valensia, oranges, zaf oren"
+  },
+  "0c967cb5-c758-4eef-a78e-6816566c9b49": {
+    "use_per_serving": 100,
+    "serving_note": "100 g",
+    "station": "barista",
+    "image_url": "/inventory/ice.jpg",
+    "aliases": "ice, ais, ice cube"
+  },
+  "8505e84f-5c90-4bbf-b077-5f545ddb88a7": {
+    "use_per_serving": 1,
+    "serving_note": "1 serve",
+    "station": "barista",
+    "image_url": "/inventory/cups.jpg",
+    "aliases": "cup, cups, ice, ais, cup ice, packaging"
+  }
+}

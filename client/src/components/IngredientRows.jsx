@@ -27,10 +27,24 @@ export function ingredientCost(rows, byId) {
   }, 0);
 }
 
+function groupByStation(inventory = []) {
+  const groups = { barista: [], kitchen: [] };
+  for (const i of inventory) {
+    const key = i.station === 'kitchen' ? 'kitchen' : 'barista';
+    groups[key].push(i);
+  }
+  for (const key of Object.keys(groups)) {
+    groups[key].sort((a, b) => a.name.localeCompare(b.name));
+  }
+  return groups;
+}
+
 export default function IngredientRows({ rows, onChange, inventory, byId, currency }) {
   function update(index, patch) {
     onChange(rows.map((r, i) => (i === index ? { ...r, ...patch } : r)));
   }
+
+  const groups = groupByStation(inventory);
 
   return (
     <>
@@ -44,14 +58,32 @@ export default function IngredientRows({ rows, onChange, inventory, byId, curren
                 className="pos-select"
                 aria-label="Ingredient"
                 value={r.inventory_item_id}
-                onChange={(e) => update(index, { inventory_item_id: e.target.value })}
+                onChange={(e) => {
+                  const id = e.target.value;
+                  const selected = byId[id];
+                  const per = Number(selected?.use_per_serving) || 0;
+                  update(index, {
+                    inventory_item_id: id,
+                    ...(per > 0 ? { quantity_per_unit: String(per) } : {}),
+                  });
+                }}
               >
                 <option value="">Select ingredient</option>
-                {inventory.map((i) => (
-                  <option key={i.id} value={i.id}>
-                    {i.name}
-                  </option>
-                ))}
+                {[
+                  ['barista', 'Barista'],
+                  ['kitchen', 'Kitchen'],
+                ].map(([key, label]) =>
+                  groups[key].length ? (
+                    <optgroup key={key} label={label}>
+                      {groups[key].map((i) => (
+                        <option key={i.id} value={i.id}>
+                          {i.name}
+                          {i.unit ? ` (${i.unit})` : ''}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ) : null
+                )}
               </select>
               <div className="pos-recipe-qty">
                 <input
@@ -70,10 +102,14 @@ export default function IngredientRows({ rows, onChange, inventory, byId, curren
               <button
                 type="button"
                 className="pos-btn ghost pos-recipe-remove"
-                aria-label="Remove ingredient"
-                onClick={() => onChange(rows.filter((_, i) => i !== index))}
+                aria-label="Delete ingredient"
+                title="Delete ingredient"
+                onClick={() => {
+                  const next = rows.filter((_, i) => i !== index);
+                  onChange(next.length ? next : [emptyIngredient()]);
+                }}
               >
-                ✕
+                Delete
               </button>
             </div>
           );

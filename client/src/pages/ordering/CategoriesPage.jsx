@@ -60,7 +60,6 @@ export default function CategoriesPage() {
       <div className="pos-page-head">
         <div>
           <h1>Categories</h1>
-          <p>Group your menu, then add the food or drinks under each category</p>
         </div>
       </div>
       {error && <div className="pos-alert error">{error}</div>}

@@ -265,7 +265,6 @@ export default function OverheadsPage() {
       <div className="pos-page-head">
         <div>
           <h1>Overheads</h1>
-          <p>Rent, electricity, water and other running costs. Reports subtract these from profit.</p>
         </div>
         <button type="button" className="pos-btn primary" onClick={() => setEditing({})}>
           + Add overhead

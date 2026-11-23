@@ -211,7 +211,6 @@ export default function SettingsPage() {
       <div className="pos-page-head">
         <div>
           <h1>Settings</h1>
-          <p>Café profile, tax, receipt, and hardware provider</p>
         </div>
       </div>
 

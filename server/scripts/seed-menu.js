@@ -11,8 +11,10 @@ require('dotenv').config({ path: path.join(__dirname, '../.env') });
 const { createClient } = require('@supabase/supabase-js');
 
 const img = (id) => `https://images.unsplash.com/photo-${id}?w=400&q=80`;
+const localImg = (file) => `/menu/${file}`;
 
 // Each item lists image candidates; the first that loads is used.
+// Strings starting with "/" are local public paths and are used as-is.
 const MENU = [
   {
     category: 'Coffee',
@@ -20,10 +22,13 @@ const MENU = [
     items: [
       ['Americano', 6, ['1514432324607-a09d9b4aefdd', '1495474472287-4d71bcdd2085']],
       ['Latte', 9, ['1561882468-9110e03e0f78', '1517701604599-bb29b565090c']],
+      ['Spanish Latte', 9, [localImg('spanish-latte.jpg'), '1561882468-9110e03e0f78']],
       ['Caramel Latte', 11, ['1599398054066-846f28917f38', '1485808191679-5f86510681a2', '1461023058943-07fcbe16d735']],
       ['Vanilla Latte', 11, ['1570968915860-54d5c301fa9f', '1541167760496-1628856ab772', '1517701604599-bb29b565090c']],
       ['Hazelnut Latte', 11, ['1572442388796-11668a67e53d', '1509042239860-f550ce710b93']],
       ['Mocha', 11, ['1578314675249-a6910f80cc4e', '1497935586351-b67a49e012bf', '1504630083234-14187a9df0f5']],
+      ['Add on Syrup', 3, [localImg('add-on-syrup.jpg')]],
+      ['Add on Espresso', 3, [localImg('add-on-espresso.jpg')]],
     ],
   },
   {
@@ -45,6 +50,7 @@ const MENU = [
       ['Press Orange', 9, ['1600271886742-f049cd451bba', '1613478223719-2ab802602423']],
       ['Markisa', 9, ['1622597467836-f3285f2131b8', '1546173159-315724a31696', '1513558161293-cdaf765ed2fd']],
       ['Chocolate Strawberry', 14, ['1553177595-4de2bb0842b9', '1579954115545-a95591f28bfc', '1542990253-0d0f5be5f0ed']],
+      ['Strawberry Fizz', 9, [localImg('strawberry-fizz.jpg'), '1551024709-8f23befc6f87']],
     ],
   },
   {
@@ -99,9 +105,15 @@ async function loads(url) {
   }
 }
 
+function resolveImageCandidate(idOrUrl) {
+  if (typeof idOrUrl === 'string' && idOrUrl.startsWith('/')) return idOrUrl;
+  return img(idOrUrl);
+}
+
 async function pickImage(ids) {
   for (const id of ids) {
-    const url = img(id);
+    const url = resolveImageCandidate(id);
+    if (url.startsWith('/')) return url;
     if (await loads(url)) return url;
   }
   return null;

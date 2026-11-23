@@ -42,10 +42,15 @@ export async function loadExpenses() {
 export function overheadByDate(expenses, fromKey, toKey) {
   const byDate = {};
   const byCategory = {};
+  const byExpense = {};
   let total = 0;
-  if (!fromKey || !toKey || fromKey > toKey) return { byDate, byCategory, total };
+  let days = 0;
+  if (!fromKey || !toKey || fromKey > toKey) {
+    return { byDate, byCategory, byExpense, total, days, perDay: 0 };
+  }
 
   for (let key = fromKey; key <= toKey; key = addDays(key, 1)) {
+    days += 1;
     const ym = key.slice(0, 7);
     const dim = daysInMonth(ym);
     let day = 0;
@@ -63,6 +68,16 @@ export function overheadByDate(expenses, fromKey, toKey) {
       if (share) {
         day += share;
         byCategory[e.category] = (byCategory[e.category] || 0) + share;
+        const id = e.id || e.name;
+        const row = (byExpense[id] ||= {
+          id,
+          name: e.name,
+          category: e.category,
+          kind: e.kind,
+          amount: Number(e.amount) || 0,
+          total: 0,
+        });
+        row.total += share;
       }
     }
     if (day) byDate[key] = day;
@@ -73,6 +88,11 @@ export function overheadByDate(expenses, fromKey, toKey) {
   return {
     byDate: Object.fromEntries(Object.entries(byDate).map(([k, v]) => [k, round(v)])),
     byCategory: Object.fromEntries(Object.entries(byCategory).map(([k, v]) => [k, round(v)])),
+    byExpense: Object.fromEntries(
+      Object.entries(byExpense).map(([k, v]) => [k, { ...v, total: round(v.total) }])
+    ),
     total: round(total),
+    days,
+    perDay: days > 0 ? round(total / days) : 0,
   };
 }

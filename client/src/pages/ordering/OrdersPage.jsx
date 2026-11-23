@@ -69,7 +69,6 @@ export default function OrdersPage() {
       <div className="pos-page-head">
         <div>
           <h1>Orders</h1>
-          <p>Orders by day · reprint and manage status</p>
         </div>
       </div>
 

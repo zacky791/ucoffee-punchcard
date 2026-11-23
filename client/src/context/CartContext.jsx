@@ -20,19 +20,30 @@ function itemKey(item) {
   ].join('|');
 }
 
-/** Checkout payload: Hot/Cold travels as a free modifier so it shows on receipts and order details. */
+/** Checkout payload: Hot/Cold and hours travel as free modifiers for receipts / order details. */
 export function itemsForCheckout(items) {
-  return items.map(({ temp, ...item }) =>
-    temp
-      ? {
-          ...item,
-          modifiers: [
-            { name: temp === 'hot' ? 'Hot' : 'Cold', price_delta: 0 },
-            ...(item.modifiers || []),
-          ],
-        }
-      : item
-  );
+  return items.map(({ temp, unit, ...item }) => {
+    const modifiers = [...(item.modifiers || [])];
+    let quantity = item.quantity;
+    let unit_price = item.unit_price;
+    let line_total = item.line_total;
+
+    if (unit === 'hour') {
+      const hours = Math.max(1, Number(item.quantity) || 1);
+      modifiers.unshift({
+        name: `${hours} hour${hours === 1 ? '' : 's'}`,
+        price_delta: 0,
+      });
+      // One booking line; duration lives in the modifier, total stays hours × rate.
+      quantity = 1;
+      unit_price = money(Number(item.base_price || 0) * hours);
+      line_total = unit_price;
+    }
+    if (temp) {
+      modifiers.unshift({ name: temp === 'hot' ? 'Hot' : 'Cold', price_delta: 0 });
+    }
+    return { ...item, quantity, unit_price, line_total, modifiers };
+  });
 }
 
 function reducer(state, action) {
@@ -77,6 +88,7 @@ function reducer(state, action) {
               ? {
                   ...i,
                   quantity: i.quantity + (item.quantity || 1),
+                  unit: i.unit || item.unit || null,
                   line_total: money(
                     lineUnitPrice(i.base_price, i.modifiers) *
                       (i.quantity + (item.quantity || 1))
@@ -87,7 +99,7 @@ function reducer(state, action) {
         };
       }
       const quantity = item.quantity || 1;
-      const unit = lineUnitPrice(item.base_price, item.modifiers);
+      const price = lineUnitPrice(item.base_price, item.modifiers);
       return {
         ...state,
         items: [
@@ -101,9 +113,10 @@ function reducer(state, action) {
             modifiers: item.modifiers || [],
             notes: item.notes || '',
             temp: item.temp,
+            unit: item.unit || null,
             quantity,
-            unit_price: unit,
-            line_total: money(unit * quantity),
+            unit_price: price,
+            line_total: money(price * quantity),
           },
         ],
       };

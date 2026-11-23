@@ -37,7 +37,6 @@ export default function ReportsPage() {
       <div className="pos-page-head">
         <div>
           <h1>Reports</h1>
-          <p>Profit, margin and where to improve</p>
         </div>
       </div>
       <div className="pos-segment pos-report-tabs" role="tablist" aria-label="Report period">

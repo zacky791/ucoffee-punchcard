@@ -11,7 +11,7 @@ const { createPosRouter } = require('./pos/routes');
 const app = express();
 
 app.use(cors({ origin: true }));
-app.use(express.json());
+app.use(express.json({ limit: '12mb' }));
 
 function readSupabaseConfig() {
   // Bracket access so esbuild does NOT inline empty values at Netlify build time
