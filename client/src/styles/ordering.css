@@ -423,6 +423,15 @@
   background: #fff;
   color: var(--pos-ink);
   min-width: 0;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.pos-input[type='date'] {
+  -webkit-appearance: none;
+  appearance: none;
+  display: block;
 }
 
 .pos-search {
@@ -1016,6 +1025,7 @@ html:has(.pos-modal-backdrop) body {
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
+  min-width: 0;
 }
 
 .pos-field label {
@@ -1558,6 +1568,19 @@ html:has(.pos-modal-backdrop) body {
   .pos-split,
   .pos-form-grid {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .pos-form-grid.pos-restock-auto-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.6rem;
+    align-items: end;
+  }
+
+  .pos-restock-auto-grid .pos-input[type='date'],
+  .pos-restock-auto-grid .pos-restock-upload-btn {
+    min-height: 44px;
+    padding: 0.55rem 0.65rem;
+    font-size: 0.88rem;
   }
 
   .pos-workspace {

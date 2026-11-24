@@ -381,7 +381,7 @@ export default function RestockPage() {
         {error && <div className="pos-alert error">{error}</div>}
 
         {isAuto ? (
-          <div className="pos-form-grid">
+          <div className="pos-form-grid pos-restock-auto-grid">
             <label className="pos-field">
               <span>Date</span>
               <input
@@ -404,14 +404,14 @@ export default function RestockPage() {
               />
               <button
                 type="button"
-                className="pos-btn ghost"
+                className="pos-btn ghost pos-restock-upload-btn"
                 style={{ width: '100%' }}
                 disabled={busy || receipts.length >= MAX_RECEIPTS}
                 onClick={() => fileRef.current?.click()}
               >
                 {receipts.length
-                  ? `Add more from gallery (${receipts.length}/${MAX_RECEIPTS})`
-                  : 'Choose from gallery'}
+                  ? `Add more (${receipts.length}/${MAX_RECEIPTS})`
+                  : 'Choose photos'}
               </button>
             </div>
 
